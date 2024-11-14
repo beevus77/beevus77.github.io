@@ -7,7 +7,7 @@
 
 # Site Settings
 locale                   : "en-US"
-title                    : "James Berkeley Larsen / Site Title"
+title                    : "Computational Catharsis"
 title_separator          : "-"
 name                     : &name "James Berkeley Larsen"
 description              : &description "personal description"
