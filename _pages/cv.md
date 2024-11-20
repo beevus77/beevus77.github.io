@@ -21,12 +21,12 @@ Education
 
 Honors and Awards
 ======
-* DOE Computational Science Graduate Fellowship (CSGF) .................................................. (2023 to 2027)
-* BYU Department of Mathematics Top Junior ................................................................. (2022)
-* BYU College of Physical and Mathematical Sciences Dean’s List ................................ (2021 to 2022)
-* UT Austin Qiskit Fall Fest 1st Place ........................................................................ (2021)
+* DOE Computational Science Graduate Fellowship (CSGF) (2023 to 2027)
+* BYU Department of Mathematics Top Junior (2022)
+* BYU College of Physical and Mathematical Sciences Dean’s List (2021 to 2022)
+* UT Austin Qiskit Fall Fest 1st Place (2021)
   * Team project verifying quantum random number generation at quantum hackathon hosted by IBM at UT Austin
-* BYU Student Research Conference “Best in Session” ........................................... (2021)
+* BYU Student Research Conference “Best in Session” (2021)
   * Presentation on using machine learning to classify crowd noise
 
 
