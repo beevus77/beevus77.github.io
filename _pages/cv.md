@@ -50,11 +50,10 @@ Work experience
     * Prepared curriculum and course materials for Python programming labs
     * Taught content to 50+ students, provided one-on-one tutoring, graded work
 
-* **Brigham Young University, Provo, UT** (Sep 2020 to Dec 2020)
-  * **Department of Computer Science**
-    * Teaching Assistant: Data Structures and Algorithms
-      * Provided on-demand tutoring and C++ debugging assistance for 200+ students
-      * Collaborated with three professors and 20+ assistants to improve course content
+* **BYU Department of Computer Science, Provo, UT** (Sep 2020 to Dec 2020)
+  * Teaching Assistant: Data Structures and Algorithms
+    * Provided on-demand tutoring and C++ debugging assistance for 200+ students
+    * Collaborated with three professors and 20+ assistants to improve course content
 
   
 Talks (TODO)
