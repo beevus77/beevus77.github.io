@@ -1,0 +1,18 @@
+{% include base_path %}
+<link rel="stylesheet" href="{{ base_path }}/assets/css/minesweeper.css">
+
+<div id="minesweeper-app" class="minesweeper">
+  <div class="minesweeper__controls">
+    <select id="minesweeper-difficulty" class="minesweeper__select" aria-label="Difficulty">
+      <option value="beginner">Beginner (9×9, 10 mines)</option>
+      <option value="intermediate">Intermediate (16×16, 40 mines)</option>
+      <option value="expert" selected>Expert (30×16, 99 mines)</option>
+    </select>
+    <button type="button" id="minesweeper-new-game" class="minesweeper__btn">New game</button>
+    <span class="minesweeper__status" id="minesweeper-status" aria-live="polite"></span>
+    <span class="minesweeper__mines" id="minesweeper-mines"></span>
+  </div>
+  <div id="minesweeper-grid" class="minesweeper__grid" role="grid" aria-label="Minesweeper board"></div>
+</div>
+
+<script src="{{ base_path }}/assets/js/minesweeper.js"></script>

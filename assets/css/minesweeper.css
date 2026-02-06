@@ -1,0 +1,135 @@
+/* Scoped under .minesweeper to avoid clashing with site styles */
+
+.minesweeper {
+  --cell-size: 26px;
+  --cell-border: 1px solid #888;
+  --cell-bg-hidden: #c0c0c0;
+  --cell-bg-revealed: #e0e0e0;
+  --cell-bg-flag: #c0c0c0;
+  --mine-red: #b00;
+  --num-1: #0000b0;
+  --num-2: #008000;
+  --num-3: #b00;
+  --num-4: #000080;
+  --num-5: #800000;
+  --num-6: #008080;
+  --num-7: #000;
+  --num-8: #808080;
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.minesweeper *,
+.minesweeper *::before,
+.minesweeper *::after {
+  box-sizing: border-box;
+}
+
+.minesweeper__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.minesweeper__select {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: 1px solid #888;
+  border-radius: 2px;
+  background: #fff;
+}
+
+.minesweeper__btn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: 1px solid #666;
+  border-radius: 2px;
+  background: #e8e8e8;
+}
+
+.minesweeper__btn:hover {
+  background: #ddd;
+}
+
+.minesweeper__status {
+  font-size: 0.95rem;
+  min-height: 1.5em;
+}
+
+.minesweeper__mines {
+  font-size: 0.95rem;
+  margin-left: auto;
+}
+
+.minesweeper__grid {
+  display: inline-grid;
+  gap: 0;
+  border: 2px solid #808080;
+  padding: 2px;
+  background: #808080;
+  width: max-content;
+  max-width: 100%;
+}
+
+.minesweeper__cell {
+  width: var(--cell-size);
+  height: var(--cell-size);
+  min-width: var(--cell-size);
+  min-height: var(--cell-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--cell-size) * 0.7);
+  font-weight: bold;
+  border: 1px solid #888;
+  background: var(--cell-bg-hidden);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.minesweeper__cell:hover:not(.minesweeper__cell--revealed):not(.minesweeper__cell--game-over) {
+  background: #d0d0d0;
+}
+
+.minesweeper__cell--revealed {
+  background: var(--cell-bg-revealed);
+  cursor: default;
+  border-color: #999;
+}
+
+.minesweeper__cell--flagged {
+  background: var(--cell-bg-flag);
+}
+
+.minesweeper__cell--mine {
+  background: var(--cell-bg-revealed);
+}
+
+.minesweeper__cell--mine.minesweeper__cell--exploded {
+  background: var(--mine-red);
+}
+
+.minesweeper__cell--num-1 { color: var(--num-1); }
+.minesweeper__cell--num-2 { color: var(--num-2); }
+.minesweeper__cell--num-3 { color: var(--num-3); }
+.minesweeper__cell--num-4 { color: var(--num-4); }
+.minesweeper__cell--num-5 { color: var(--num-5); }
+.minesweeper__cell--num-6 { color: var(--num-6); }
+.minesweeper__cell--num-7 { color: var(--num-7); }
+.minesweeper__cell--num-8 { color: var(--num-8); }
+
+.minesweeper__cell--game-over {
+  cursor: default;
+}
+
+@media (max-width: 768px) {
+  .minesweeper {
+    --cell-size: 20px;
+  }
+}
