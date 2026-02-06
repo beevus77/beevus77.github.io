@@ -161,15 +161,223 @@
     return { toReveal: revealList, toFlag: flagList };
   }
 
+  // --- Full solver (David Hill style): probability engine, 50/50, guessing ---
+
+  var MAX_FRONTIER_FOR_PROB = 22;
+  var PROBABILITY_ENGINE_TIMEOUT_MS = 3000;
+
+  function getFrontier() {
+    var set = {};
+    var r, c, dr, dc, nr, nc, cell;
+    for (r = 0; r < state.rows; r++) {
+      for (c = 0; c < state.cols; c++) {
+        cell = state.cells[r][c];
+        if (!cell.revealed && !cell.flagged) continue;
+        if (cell.revealed) {
+          for (dr = -1; dr <= 1; dr++) {
+            for (dc = -1; dc <= 1; dc++) {
+              if (dr === 0 && dc === 0) continue;
+              nr = r + dr; nc = c + dc;
+              if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols && !state.cells[nr][nc].revealed && !state.cells[nr][nc].flagged) {
+                set[nr + ',' + nc] = [nr, nc];
+              }
+            }
+          }
+        }
+      }
+    }
+    var list = [];
+    for (var id in set) list.push(set[id]);
+    return list;
+  }
+
+  function getConstraints(frontierSet) {
+    var constraints = [];
+    var r, c, cell, need, hidden, indices, i, id;
+    for (r = 0; r < state.rows; r++) {
+      for (c = 0; c < state.cols; c++) {
+        cell = state.cells[r][c];
+        if (!cell.revealed || cell.count == null) continue;
+        need = cell.count - countAdjacentFlags(r, c);
+        hidden = getAdjacentHidden(r, c);
+        if (hidden.length === 0) continue;
+        indices = [];
+        for (i = 0; i < hidden.length; i++) {
+          id = hidden[i][0] + ',' + hidden[i][1];
+          if (frontierSet[id] !== undefined) indices.push(frontierSet[id]);
+        }
+        if (indices.length > 0) constraints.push({ indices: indices, need: need });
+      }
+    }
+    return constraints;
+  }
+
+  function probabilityEngine(frontier, constraints, remainingMines, otherHiddenCount) {
+    var F = frontier.length;
+    var O = otherHiddenCount;
+    var M = remainingMines;
+    var minK = Math.max(0, M - O);
+    var maxK = Math.min(F, M);
+
+    var mineCounts = [];
+    var i;
+    for (i = 0; i < F; i++) mineCounts[i] = 0;
+    var totalSolutions = 0;
+    var assignment = [];
+    var startTime = Date.now();
+
+    function checkConstraints() {
+      var c, sum, j;
+      for (c = 0; c < constraints.length; c++) {
+        sum = 0;
+        for (j = 0; j < constraints[c].indices.length; j++) sum += assignment[constraints[c].indices[j]];
+        if (sum !== constraints[c].need) return false;
+      }
+      return true;
+    }
+
+    function recurse(idx, placed) {
+      if (Date.now() - startTime > PROBABILITY_ENGINE_TIMEOUT_MS) return;
+      if (idx === F) {
+        if (placed < minK || placed > maxK) return;
+        if (!checkConstraints()) return;
+        totalSolutions++;
+        for (i = 0; i < F; i++) mineCounts[i] += assignment[i];
+        return;
+      }
+      assignment[idx] = 0;
+      recurse(idx + 1, placed);
+      assignment[idx] = 1;
+      recurse(idx + 1, placed + 1);
+    }
+
+    recurse(0, 0);
+
+    var probs = {};
+    for (i = 0; i < F; i++) {
+      var key = frontier[i][0] + ',' + frontier[i][1];
+      probs[key] = totalSolutions === 0 ? 0.5 : mineCounts[i] / totalSolutions;
+    }
+    return { probs: probs, totalSolutions: totalSolutions, mineCounts: mineCounts };
+  }
+
+  function find5050(frontier, constraints) {
+    var pairs = [];
+    var c, inds, need;
+    for (c = 0; c < constraints.length; c++) {
+      inds = constraints[c].indices;
+      need = constraints[c].need;
+      if (inds.length === 2 && need === 1) {
+        var r0 = frontier[inds[0]][0], c0 = frontier[inds[0]][1];
+        var r1 = frontier[inds[1]][0], c1 = frontier[inds[1]][1];
+        pairs.push([[r0, c0], [r1, c1]]);
+      }
+    }
+    return pairs;
+  }
+
+  function guessingLogic(probs, frontier, frontierSet) {
+    var safest = 1;
+    var i, j, key, p, r, c, nr, nc, adjKey, maxAdjP, score;
+    for (i = 0; i < frontier.length; i++) {
+      key = frontier[i][0] + ',' + frontier[i][1];
+      p = probs[key];
+      if (p < safest) safest = p;
+    }
+    var cutoff = Math.min(1, safest + 0.1);
+    var candidates = [];
+    for (i = 0; i < frontier.length; i++) {
+      r = frontier[i][0];
+      c = frontier[i][1];
+      key = r + ',' + c;
+      p = probs[key];
+      if (p > cutoff) continue;
+      maxAdjP = 0;
+      for (var dr = -1; dr <= 1; dr++) {
+        for (var dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          nr = r + dr;
+          nc = c + dc;
+          if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols) {
+            adjKey = nr + ',' + nc;
+            if (probs[adjKey] !== undefined && probs[adjKey] > maxAdjP) maxAdjP = probs[adjKey];
+          }
+        }
+      }
+      score = (1 - p) + 0.2 * (1 - maxAdjP);
+      candidates.push({ r: r, c: c, p: p, score: score });
+    }
+    if (candidates.length === 0) return null;
+    candidates.sort(function (a, b) { return b.score - a.score; });
+    return [candidates[0].r, candidates[0].c];
+  }
+
+  function fullSolver(acceptGuesses) {
+    var trivial = trivialAnalysis();
+    if (trivial && (trivial.toReveal.length > 0 || trivial.toFlag.length > 0)) {
+      return { toReveal: trivial.toReveal, toFlag: trivial.toFlag, guess: null, method: 'trivial' };
+    }
+
+    var frontier = getFrontier();
+    if (frontier.length === 0) return null;
+
+    var frontierSet = {};
+    for (var i = 0; i < frontier.length; i++) {
+      frontierSet[frontier[i][0] + ',' + frontier[i][1]] = i;
+    }
+    var constraints = getConstraints(frontierSet);
+    var remainingMines = state.mines - state.flags;
+    var totalHidden = state.rows * state.cols - state.revealed - state.flags;
+    var otherHiddenCount = totalHidden - frontier.length;
+
+    if (frontier.length > MAX_FRONTIER_FOR_PROB) {
+      var guessCell = frontier[Math.floor(Math.random() * frontier.length)];
+      if (acceptGuesses) return { toReveal: [], toFlag: [], guess: guessCell, method: 'random' };
+      return { toReveal: [], toFlag: [], guess: null, method: 'stuck' };
+    }
+
+    var result = probabilityEngine(frontier, constraints, remainingMines, otherHiddenCount);
+    var probs = result.probs;
+
+    var safeReveal = [];
+    var toFlag = [];
+    for (i = 0; i < frontier.length; i++) {
+      var key = frontier[i][0] + ',' + frontier[i][1];
+      var p = probs[key];
+      if (p <= 0) safeReveal.push(frontier[i]);
+      if (p >= 1) toFlag.push(frontier[i]);
+    }
+    if (safeReveal.length > 0 || toFlag.length > 0) {
+      return { toReveal: safeReveal, toFlag: toFlag, guess: null, method: 'probability' };
+    }
+
+    var fifty50 = find5050(frontier, constraints);
+    if (fifty50.length > 0) {
+      var pick = fifty50[0][0];
+      if (acceptGuesses) return { toReveal: [], toFlag: [], guess: pick, method: '50/50' };
+      return { toReveal: [], toFlag: [], guess: pick, method: '50/50' };
+    }
+
+    var bestGuess = guessingLogic(probs, frontier, frontierSet);
+    if (bestGuess && acceptGuesses) {
+      return { toReveal: [], toFlag: [], guess: bestGuess, method: 'guessing' };
+    }
+    if (bestGuess) return { toReveal: [], toFlag: [], guess: bestGuess, method: 'guessing' };
+    return null;
+  }
+
   function runAutosolve() {
     if (state.over || !state.mineSet) return;
     startTimer();
 
     var total = state.rows * state.cols - state.mines;
-    var didSomething = true;
-    while (didSomething && !state.over && state.revealed < total) {
-      didSomething = false;
-      var move = trivialAnalysis();
+    var acceptGuesses = true;
+    var maxSteps = 500;
+    var steps = 0;
+
+    while (!state.over && state.revealed < total && steps < maxSteps) {
+      steps++;
+      var move = fullSolver(acceptGuesses);
       if (!move) break;
 
       var i, r, c;
@@ -179,7 +387,6 @@
         if (!state.cells[r][c].flagged) {
           state.cells[r][c].flagged = true;
           state.flags++;
-          didSomething = true;
         }
       }
       for (i = 0; i < move.toReveal.length; i++) {
@@ -187,14 +394,28 @@
         c = move.toReveal[i][1];
         if (!state.cells[r][c].revealed && !state.cells[r][c].flagged) {
           reveal(r, c);
-          didSomething = true;
           if (state.over) break;
         }
       }
+      if (state.over) break;
+      if (move.guess && acceptGuesses) {
+        r = move.guess[0];
+        c = move.guess[1];
+        if (!state.cells[r][c].revealed && !state.cells[r][c].flagged) {
+          reveal(r, c);
+        }
+      } else if (move.guess && !acceptGuesses) {
+        if (statusEl) statusEl.textContent = 'No safe move (guess required)';
+        break;
+      } else if (move.toReveal.length === 0 && move.toFlag.length === 0 && !move.guess) {
+        break;
+      }
     }
 
-    if (!state.over && state.revealed < total && !didSomething) {
-      if (statusEl) statusEl.textContent = 'No safe move (guess required)';
+    if (!state.over && state.revealed < total) {
+      if (statusEl && statusEl.textContent.indexOf('guess') === -1) {
+        statusEl.textContent = 'Solver stuck (try clicking once and Autosolve again)';
+      }
     }
     updateStatus();
     render();
