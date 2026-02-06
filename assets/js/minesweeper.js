@@ -14,6 +14,7 @@
   var statusEl = document.getElementById('minesweeper-status');
   var minesEl = document.getElementById('minesweeper-mines');
   var newGameBtn = document.getElementById('minesweeper-new-game');
+  var autosolveBtn = document.getElementById('minesweeper-autosolve');
   var difficultySelect = document.getElementById('minesweeper-difficulty');
 
   var state = {
@@ -89,6 +90,114 @@
       }
     }
     return n;
+  }
+
+  function countAdjacentFlags(r, c) {
+    var n = 0;
+    for (var dr = -1; dr <= 1; dr++) {
+      for (var dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        var nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols && state.cells[nr][nc].flagged) n++;
+      }
+    }
+    return n;
+  }
+
+  function getAdjacentHidden(r, c) {
+    var out = [];
+    for (var dr = -1; dr <= 1; dr++) {
+      for (var dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        var nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols) {
+          var cell = state.cells[nr][nc];
+          if (!cell.revealed && !cell.flagged) out.push([nr, nc]);
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Trivial analysis (after David Hill's JSMinesweeper solver).
+   * Satisfied tile: number equals adjacent flags -> remaining adjacent are safe to reveal.
+   * Full mines: (number - adjacent flags) === count of adjacent hidden -> those hidden are all mines.
+   */
+  function trivialAnalysis() {
+    var toReveal = {};
+    var toFlag = {};
+    var r, c, cell, num, adjFlags, hidden, i, key;
+
+    for (r = 0; r < state.rows; r++) {
+      for (c = 0; c < state.cols; c++) {
+        cell = state.cells[r][c];
+        if (!cell.revealed || cell.count == null || cell.count === 0) continue;
+        num = cell.count;
+        adjFlags = countAdjacentFlags(r, c);
+        hidden = getAdjacentHidden(r, c);
+        if (hidden.length === 0) continue;
+
+        if (adjFlags === num) {
+          for (i = 0; i < hidden.length; i++) {
+            key = hidden[i][0] + ',' + hidden[i][1];
+            toReveal[key] = hidden[i];
+          }
+        } else if (num - adjFlags === hidden.length) {
+          for (i = 0; i < hidden.length; i++) {
+            key = hidden[i][0] + ',' + hidden[i][1];
+            toFlag[key] = hidden[i];
+          }
+        }
+      }
+    }
+
+    var revealList = [];
+    for (key in toReveal) revealList.push(toReveal[key]);
+    var flagList = [];
+    for (key in toFlag) flagList.push(toFlag[key]);
+
+    if (revealList.length === 0 && flagList.length === 0) return null;
+    return { toReveal: revealList, toFlag: flagList };
+  }
+
+  function runAutosolve() {
+    if (state.over || !state.mineSet) return;
+    startTimer();
+
+    var total = state.rows * state.cols - state.mines;
+    var didSomething = true;
+    while (didSomething && !state.over && state.revealed < total) {
+      didSomething = false;
+      var move = trivialAnalysis();
+      if (!move) break;
+
+      var i, r, c;
+      for (i = 0; i < move.toFlag.length; i++) {
+        r = move.toFlag[i][0];
+        c = move.toFlag[i][1];
+        if (!state.cells[r][c].flagged) {
+          state.cells[r][c].flagged = true;
+          state.flags++;
+          didSomething = true;
+        }
+      }
+      for (i = 0; i < move.toReveal.length; i++) {
+        r = move.toReveal[i][0];
+        c = move.toReveal[i][1];
+        if (!state.cells[r][c].revealed && !state.cells[r][c].flagged) {
+          reveal(r, c);
+          didSomething = true;
+          if (state.over) break;
+        }
+      }
+    }
+
+    if (!state.over && state.revealed < total && !didSomething) {
+      if (statusEl) statusEl.textContent = 'No safe move (guess required)';
+    }
+    updateStatus();
+    render();
   }
 
   function startTimer() {
@@ -246,6 +355,7 @@
     gridEl.addEventListener('contextmenu', function (e) { e.preventDefault(); handleClick(e); });
   }
   if (newGameBtn) newGameBtn.addEventListener('click', newGame);
+  if (autosolveBtn) autosolveBtn.addEventListener('click', runAutosolve);
   if (difficultySelect) difficultySelect.addEventListener('change', newGame);
 
   newGame();
