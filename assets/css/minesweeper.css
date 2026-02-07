@@ -238,6 +238,21 @@ body.rlms-standalone.rlms-game {
   line-height: 1.35;
 }
 
+.rlms-back {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.rlms-back a {
+  color: var(--rlms-accent);
+  text-decoration: none;
+}
+
+.rlms-back a:hover {
+  text-decoration: underline;
+}
+
 /* Board */
 .rlms-board-wrap {
   padding: 16px;

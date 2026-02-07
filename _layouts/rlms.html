@@ -1,14 +1,13 @@
 ---
 layout: null
 ---
-{% include base_path %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RLMS – Minesweeper</title>
-  <link rel="stylesheet" href="{{ base_path }}/assets/css/minesweeper.css">
+  <link rel="stylesheet" href="{{ '/assets/css/minesweeper.css' | relative_url }}">
 </head>
 <body class="rlms-game rlms-standalone">
   <div class="rlms-app">
@@ -91,6 +90,8 @@ layout: null
     </div>
   </div>
 
-  <script src="{{ base_path }}/assets/js/minesweeper.js"></script>
+  <p class="rlms-back"><a href="{{ '/' | relative_url }}">Back to Computational Catharsis</a></p>
+
+  <script src="{{ '/assets/js/minesweeper.js' | relative_url }}"></script>
 </body>
 </html>
