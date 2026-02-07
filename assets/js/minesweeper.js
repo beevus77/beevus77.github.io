@@ -31,10 +31,6 @@
   var autoplayGames = 0;
   var autoplayResults = [];
 
-  var chartEl = document.getElementById('minesweeper-win-chart');
-  var chartCaptionEl = document.getElementById('minesweeper-chart-caption');
-  var pauseValueEl = document.getElementById('minesweeper-pause-value');
-
   var W = 9, H = 9, MINES = 10;
   var firstClick = true;
   var gameOver = false;
@@ -654,6 +650,8 @@
       autoplayGames++;
       if (won) autoplayWins++;
       autoplayResults.push(won);
+      var capEl = document.getElementById('minesweeper-chart-caption');
+      if (capEl) capEl.textContent = 'Games: ' + autoplayGames + ' — Win ratio: ' + ((autoplayWins / autoplayGames) * 100).toFixed(1) + '%';
       drawWinRatioChart();
       setTimeout(function () {
         if (!autoplayActive) return;
@@ -674,7 +672,14 @@
   }
 
   function drawWinRatioChart() {
-    if (!chartEl || !chartEl.getContext) return;
+    var chartEl = document.getElementById('minesweeper-win-chart');
+    var chartCaptionEl = document.getElementById('minesweeper-chart-caption');
+    if (!chartEl || !chartEl.getContext) {
+      if (chartCaptionEl && autoplayResults.length > 0) {
+        chartCaptionEl.textContent = 'Games: ' + autoplayGames + ' — Win ratio: ' + ((autoplayWins / autoplayGames) * 100).toFixed(1) + '%';
+      }
+      return;
+    }
     var ctx = chartEl.getContext('2d');
     var w = chartEl.width;
     var h = chartEl.height;
@@ -962,15 +967,35 @@
     }
   }
 
+  function updatePauseDisplay() {
+    var el = document.getElementById('minesweeper-pause-value');
+    if (el) el.textContent = (autoplayPauseMs / 1000).toFixed(1) + ' s';
+  }
+
   var gameContainer = document.querySelector('.rlms-game');
   if (gameContainer) {
     gameContainer.addEventListener('click', function (e) {
       var el = e.target;
       while (el && el !== gameContainer) {
-        if (el.getAttribute && el.getAttribute('data-rlms-action') === 'autoplay') {
+        var action = el.getAttribute && el.getAttribute('data-rlms-action');
+        if (action === 'autoplay') {
           e.preventDefault();
           e.stopPropagation();
           handleAutoplayClick();
+          return;
+        }
+        if (action === 'pause-minus') {
+          e.preventDefault();
+          e.stopPropagation();
+          autoplayPauseMs = Math.max(200, autoplayPauseMs - 200);
+          updatePauseDisplay();
+          return;
+        }
+        if (action === 'pause-plus') {
+          e.preventDefault();
+          e.stopPropagation();
+          autoplayPauseMs = Math.min(5000, autoplayPauseMs + 200);
+          updatePauseDisplay();
           return;
         }
         el = el.parentNode;
@@ -978,24 +1003,6 @@
     });
   }
 
-  function updatePauseDisplay() {
-    if (pauseValueEl) pauseValueEl.textContent = (autoplayPauseMs / 1000).toFixed(1) + ' s';
-  }
-
-  var pauseMinusBtn = document.getElementById('minesweeper-pause-minus');
-  var pausePlusBtn = document.getElementById('minesweeper-pause-plus');
-  if (pauseMinusBtn) {
-    pauseMinusBtn.addEventListener('click', function () {
-      autoplayPauseMs = Math.max(200, autoplayPauseMs - 200);
-      updatePauseDisplay();
-    });
-  }
-  if (pausePlusBtn) {
-    pausePlusBtn.addEventListener('click', function () {
-      autoplayPauseMs = Math.min(5000, autoplayPauseMs + 200);
-      updatePauseDisplay();
-    });
-  }
   updatePauseDisplay();
   drawWinRatioChart();
 
