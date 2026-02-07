@@ -685,40 +685,42 @@
           setFace('🙂');
         });
 
-        d.addEventListener('click', function (e) {
-          if (gameOver) return;
-          if (e.shiftKey) chord(x, y);
-          else reveal(x, y);
-        });
+        (function (cx, cy) {
+          d.addEventListener('click', function (e) {
+            if (gameOver) return;
+            if (e.shiftKey) chord(cx, cy);
+            else reveal(cx, cy);
+          });
 
-        d.addEventListener('auxclick', function (e) {
-          if (gameOver) return;
-          if (e.button === 1) {
+          d.addEventListener('auxclick', function (e) {
+            if (gameOver) return;
+            if (e.button === 1) {
+              e.preventDefault();
+              chord(cx, cy);
+            }
+          });
+
+          d.addEventListener('contextmenu', function (e) {
             e.preventDefault();
-            chord(x, y);
-          }
-        });
+            if (gameOver) return;
+            toggleFlag(cx, cy);
+          });
 
-        d.addEventListener('contextmenu', function (e) {
-          e.preventDefault();
-          if (gameOver) return;
-          toggleFlag(x, y);
-        });
-
-        var pressTimer = null;
-        d.addEventListener('touchstart', function () {
-          if (gameOver) return;
-          pressTimer = setTimeout(function () {
-            toggleFlag(x, y);
-            pressTimer = null;
-          }, 450);
-        }, { passive: true });
-        d.addEventListener('touchend', function () {
-          if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-          }
-        });
+          var pressTimer = null;
+          d.addEventListener('touchstart', function () {
+            if (gameOver) return;
+            pressTimer = setTimeout(function () {
+              toggleFlag(cx, cy);
+              pressTimer = null;
+            }, 450);
+          }, { passive: true });
+          d.addEventListener('touchend', function () {
+            if (pressTimer) {
+              clearTimeout(pressTimer);
+              pressTimer = null;
+            }
+          });
+        }(x, y));
 
         grid[idx].el = d;
         boardEl.appendChild(d);
