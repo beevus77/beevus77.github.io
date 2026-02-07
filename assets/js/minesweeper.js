@@ -353,7 +353,7 @@
     for (y = 0; y < H; y++) {
       for (x = 0; x < W; x++) {
         cell = grid[idxOf(x, y)];
-        if (!cell.revealed || cell.adj === 0) continue;
+        if (!cell.revealed || cell.mine || cell.adj === 0) continue;
         num = cell.adj;
         adjFlags = countAdjacentFlags(x, y);
         hidden = getAdjacentHidden(x, y);
@@ -412,10 +412,11 @@
     for (y = 0; y < H; y++) {
       for (x = 0; x < W; x++) {
         cell = grid[idxOf(x, y)];
-        if (!cell.revealed || cell.adj == null) continue;
+        if (!cell.revealed || cell.mine || cell.adj == null) continue;
         need = cell.adj - countAdjacentFlags(x, y);
         hidden = getAdjacentHidden(x, y);
         if (hidden.length === 0) continue;
+        if (need < 0 || need > hidden.length) continue;
         indices = [];
         for (i = 0; i < hidden.length; i++) {
           id = key(hidden[i][0], hidden[i][1]);
