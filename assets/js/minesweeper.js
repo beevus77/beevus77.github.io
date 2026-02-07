@@ -25,8 +25,15 @@
   var resetBtn = document.getElementById('minesweeper-reset');
 
   var autoplayActive = false;
-  var AUTOPLAY_PAUSE_MS = 1200;
+  var autoplayPauseMs = 1200;
   var AUTOPLAY_START_DELAY_MS = 150;
+  var autoplayWins = 0;
+  var autoplayGames = 0;
+  var autoplayResults = [];
+
+  var chartEl = document.getElementById('minesweeper-win-chart');
+  var chartCaptionEl = document.getElementById('minesweeper-chart-caption');
+  var pauseValueEl = document.getElementById('minesweeper-pause-value');
 
   var W = 9, H = 9, MINES = 10;
   var firstClick = true;
@@ -642,11 +649,17 @@
     }
 
     if (autoplayActive) {
+      var totalSafe = W * H - MINES;
+      var won = (revealedCount >= totalSafe);
+      autoplayGames++;
+      if (won) autoplayWins++;
+      autoplayResults.push(won);
+      drawWinRatioChart();
       setTimeout(function () {
         if (!autoplayActive) return;
         newGame();
         setTimeout(autoplayRound, AUTOPLAY_START_DELAY_MS);
-      }, AUTOPLAY_PAUSE_MS);
+      }, autoplayPauseMs);
     }
   }
 
@@ -658,6 +671,94 @@
       reveal(cx, cy);
     }
     runAutosolve();
+  }
+
+  function drawWinRatioChart() {
+    if (!chartEl || !chartEl.getContext) return;
+    var ctx = chartEl.getContext('2d');
+    var w = chartEl.width;
+    var h = chartEl.height;
+    var padding = { left: 44, right: 20, top: 20, bottom: 32 };
+    var plotLeft = padding.left;
+    var plotRight = w - padding.right;
+    var plotTop = padding.top;
+    var plotBottom = h - padding.bottom;
+    var plotW = plotRight - plotLeft;
+    var plotH = plotBottom - plotTop;
+
+    ctx.clearRect(0, 0, w, h);
+
+    var n = autoplayResults.length;
+    var maxX = Math.max(n, 1);
+    var minY = 0;
+    var maxY = 1;
+
+    ctx.strokeStyle = 'rgba(255,255,255,.15)';
+    ctx.lineWidth = 1;
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(159,176,199,.9)';
+
+    for (var i = 0; i <= 5; i++) {
+      var y = plotTop + (plotH * (1 - i / 5));
+      ctx.beginPath();
+      ctx.moveTo(plotLeft, y);
+      ctx.lineTo(plotRight, y);
+      ctx.stroke();
+      if (i > 0 && i < 5) {
+        var label = (i * 0.2).toFixed(1);
+        ctx.fillText(label, 4, y + 4);
+      }
+    }
+    var gridStepX = n > 20 ? Math.floor(n / 10) : n > 5 ? 2 : 1;
+    if (gridStepX < 1) gridStepX = 1;
+    for (var g = gridStepX; g < n; g += gridStepX) {
+      var x = plotLeft + (plotW * (g / maxX));
+      ctx.beginPath();
+      ctx.moveTo(x, plotTop);
+      ctx.lineTo(x, plotBottom);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'rgba(255,255,255,.4)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(plotLeft, plotTop);
+    ctx.lineTo(plotLeft, plotBottom);
+    ctx.lineTo(plotRight, plotBottom);
+    ctx.stroke();
+
+    ctx.fillText('0', plotLeft - 6, plotBottom + 14);
+    ctx.fillText(String(n), plotRight - (n >= 10 ? 14 : 6), plotBottom + 14);
+
+    if (n === 0) {
+      if (chartCaptionEl) chartCaptionEl.textContent = 'Games: 0 — Win ratio: —';
+      return;
+    }
+
+    var ratio = autoplayWins / autoplayGames;
+    var pts = [];
+    var winsSoFar = 0;
+    for (var i = 0; i < n; i++) {
+      if (autoplayResults[i]) winsSoFar++;
+      pts.push({ x: (i + 1) / maxX, y: winsSoFar / (i + 1) });
+    }
+
+    ctx.strokeStyle = '#6aa8ff';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (var j = 0; j < pts.length; j++) {
+      var px = plotLeft + pts[j].x * plotW;
+      var py = plotBottom - pts[j].y * plotH;
+      if (j === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    if (chartCaptionEl) {
+      chartCaptionEl.textContent = 'Games: ' + n + ' — Win ratio: ' + (ratio * 100).toFixed(1) + '%';
+    }
   }
 
   function newGame() {
@@ -876,6 +977,27 @@
       }
     });
   }
+
+  function updatePauseDisplay() {
+    if (pauseValueEl) pauseValueEl.textContent = (autoplayPauseMs / 1000).toFixed(1) + ' s';
+  }
+
+  var pauseMinusBtn = document.getElementById('minesweeper-pause-minus');
+  var pausePlusBtn = document.getElementById('minesweeper-pause-plus');
+  if (pauseMinusBtn) {
+    pauseMinusBtn.addEventListener('click', function () {
+      autoplayPauseMs = Math.max(200, autoplayPauseMs - 200);
+      updatePauseDisplay();
+    });
+  }
+  if (pausePlusBtn) {
+    pausePlusBtn.addEventListener('click', function () {
+      autoplayPauseMs = Math.min(5000, autoplayPauseMs + 200);
+      updatePauseDisplay();
+    });
+  }
+  updatePauseDisplay();
+  drawWinRatioChart();
 
   applyPreset();
   newGame();

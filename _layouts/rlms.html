@@ -87,6 +87,21 @@ layout: null
         </div>
 
         <div id="minesweeper-board" class="rlms-grid" role="grid" aria-label="Minesweeper board"></div>
+
+        <div class="rlms-chart-section" id="minesweeper-chart-section">
+          <div class="rlms-chart-header">
+            <span class="rlms-chart-title">Win ratio (autoplay)</span>
+            <div class="rlms-pause-control" aria-label="Pause between games">
+              <button type="button" class="rlms-pause-btn" id="minesweeper-pause-minus" aria-label="Decrease pause">−</button>
+              <span class="rlms-pause-value" id="minesweeper-pause-value">1.2 s</span>
+              <button type="button" class="rlms-pause-btn" id="minesweeper-pause-plus" aria-label="Increase pause">+</button>
+            </div>
+          </div>
+          <div class="rlms-chart-wrap">
+            <canvas id="minesweeper-win-chart" class="rlms-chart" width="600" height="200" aria-label="Win ratio over games played"></canvas>
+          </div>
+          <p class="rlms-chart-caption" id="minesweeper-chart-caption">Games: 0 — Win ratio: —</p>
+        </div>
       </div>
     </div>
   </div>
