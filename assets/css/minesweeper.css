@@ -1,135 +1,354 @@
-/* Scoped under .minesweeper to avoid clashing with site styles */
+/* RLMS Minesweeper – self-contained dark theme (does not inherit site look) */
 
-.minesweeper {
-  --cell-size: 26px;
-  --cell-border: 1px solid #888;
-  --cell-bg-hidden: #c0c0c0;
-  --cell-bg-revealed: #e0e0e0;
-  --cell-bg-flag: #c0c0c0;
-  --mine-red: #b00;
-  --num-1: #0000b0;
-  --num-2: #008000;
-  --num-3: #b00;
-  --num-4: #000080;
-  --num-5: #800000;
-  --num-6: #008080;
-  --num-7: #000;
-  --num-8: #808080;
+.rlms-game {
+  --rlms-bg: #0f1115;
+  --rlms-panel: #161a22;
+  --rlms-panel2: #1c2230;
+  --rlms-text: #e9eef7;
+  --rlms-muted: #9fb0c7;
+  --rlms-accent: #6aa8ff;
+  --rlms-danger: #ff5c7a;
+  --rlms-good: #56d364;
+  --rlms-border: #2b3447;
+  --rlms-cell: 28px;
+  --rlms-gap: 2px;
+  --rlms-radius: 10px;
+  --rlms-shadow: 0 10px 30px rgba(0,0,0,.35);
+  --rlms-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+
   box-sizing: border-box;
-  max-width: 100%;
-  overflow: auto;
+  margin: 2rem -1rem;
+  padding: 24px;
+  background: radial-gradient(1200px 900px at 20% 0%, #1a2040 0%, var(--rlms-bg) 55%) fixed;
+  color: var(--rlms-text);
+  font-family: var(--rlms-font);
+  border-radius: var(--rlms-radius);
 }
 
-.minesweeper *,
-.minesweeper *::before,
-.minesweeper *::after {
+.rlms-game *,
+.rlms-game *::before,
+.rlms-game *::after {
   box-sizing: border-box;
 }
 
-.minesweeper__controls {
+.rlms-app {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .rlms-app {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rlms-card {
+  background: linear-gradient(180deg, var(--rlms-panel) 0%, #121623 100%);
+  border: 1px solid var(--rlms-border);
+  border-radius: var(--rlms-radius);
+  box-shadow: var(--rlms-shadow);
+  overflow: hidden;
+}
+
+.rlms-head {
+  padding: 16px 16px 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0));
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+.rlms-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  margin: 0 0 6px;
   display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rlms-title a {
+  color: var(--rlms-accent);
+}
+
+.rlms-subtitle {
+  margin: 0;
+  color: var(--rlms-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.rlms-body {
+  padding: 16px;
+}
+
+.rlms-body label {
+  font-size: 12px;
+  color: var(--rlms-muted);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.rlms-body select,
+.rlms-body input[type="number"] {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--rlms-border);
+  background: var(--rlms-panel2);
+  color: var(--rlms-text);
+  outline: none;
+}
+
+.rlms-body input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.rlms-body input::-webkit-outer-spin-button,
+.rlms-body input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.rlms-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rlms-btns {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.rlms-btn {
+  border: 1px solid var(--rlms-border);
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+  color: var(--rlms-text);
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform .05s ease, border-color .2s ease, background .2s ease;
+  user-select: none;
+}
+
+.rlms-btn:hover {
+  border-color: #3a4663;
+}
+
+.rlms-btn:active {
+  transform: translateY(1px);
+}
+
+.rlms-btn--primary {
+  border-color: rgba(106,168,255,.55);
+  background: linear-gradient(180deg, rgba(106,168,255,.22), rgba(106,168,255,.06));
+}
+
+.rlms-btn--danger {
+  border-color: rgba(255,92,122,.55);
+  background: linear-gradient(180deg, rgba(255,92,122,.22), rgba(255,92,122,.06));
+}
+
+.rlms-statbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.rlms-pill {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  padding: 10px 12px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.rlms-pill small {
+  font-weight: 600;
+  color: var(--rlms-muted);
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.rlms-pill__big {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.rlms-status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  font-size: 13px;
+  color: var(--rlms-muted);
+  line-height: 1.35;
+}
+
+.rlms-status b {
+  color: var(--rlms-text);
+}
+
+.rlms-status.rlms-status--win {
+  border-color: rgba(86,211,100,.35);
+}
+
+.rlms-status.rlms-status--lose {
+  border-color: rgba(255,92,122,.35);
+}
+
+.rlms-kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.06);
+  color: var(--rlms-text);
+}
+
+.rlms-footer-tip {
+  margin-top: 14px;
+  color: var(--rlms-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* Board */
+.rlms-board-wrap {
+  padding: 16px;
+}
+
+.rlms-board-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.rlms-face {
+  font-size: 22px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rlms-meta {
+  display: flex;
+  gap: 10px;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
 }
 
-.minesweeper__select {
-  padding: 0.35rem 0.5rem;
-  font-size: 0.95rem;
-  cursor: pointer;
-  border: 1px solid #888;
-  border-radius: 2px;
-  background: #fff;
+.rlms-meta-box {
+  min-width: 110px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
-.minesweeper__btn {
-  padding: 0.4rem 0.75rem;
-  font-size: 0.95rem;
-  cursor: pointer;
-  border: 1px solid #666;
-  border-radius: 2px;
-  background: #e8e8e8;
+.rlms-meta-box span {
+  color: var(--rlms-muted);
+  font-size: 11px;
 }
 
-.minesweeper__btn:hover {
-  background: #ddd;
+.rlms-meta-box strong {
+  font-size: 16px;
+  letter-spacing: .5px;
 }
 
-.minesweeper__status {
-  font-size: 0.95rem;
-  min-height: 1.5em;
-}
-
-.minesweeper__mines {
-  font-size: 0.95rem;
-  margin-left: auto;
-}
-
-.minesweeper__grid {
-  display: inline-grid;
-  gap: 0;
-  border: 2px solid #808080;
-  padding: 2px;
-  background: #808080;
-  width: max-content;
+.rlms-grid {
+  display: grid;
+  gap: var(--rlms-gap);
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  padding: 10px;
+  width: fit-content;
   max-width: 100%;
+  overflow: auto;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.2);
 }
 
-.minesweeper__cell {
-  width: var(--cell-size);
-  height: var(--cell-size);
-  min-width: var(--cell-size);
-  min-height: var(--cell-size);
+.rlms-cell {
+  width: var(--rlms-cell);
+  height: var(--rlms-cell);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: calc(var(--cell-size) * 0.7);
-  font-weight: bold;
-  border: 1px solid #888;
-  background: var(--cell-bg-hidden);
-  cursor: pointer;
+  font-weight: 800;
+  font-size: 14px;
   user-select: none;
-  -webkit-user-select: none;
+  cursor: pointer;
+  border: 1px solid rgba(0,0,0,.18);
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.03));
+  transition: filter .12s ease, transform .05s ease, background .15s ease, border-color .15s ease;
 }
 
-.minesweeper__cell:hover:not(.minesweeper__cell--revealed):not(.minesweeper__cell--game-over) {
-  background: #d0d0d0;
+.rlms-cell:hover {
+  filter: brightness(1.08);
+  border-color: rgba(255,255,255,.18);
 }
 
-.minesweeper__cell--revealed {
-  background: var(--cell-bg-revealed);
+.rlms-cell:active {
+  transform: translateY(1px);
+}
+
+.rlms-cell.rlms-cell--revealed {
   cursor: default;
-  border-color: #999;
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.08);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
 }
 
-.minesweeper__cell--flagged {
-  background: var(--cell-bg-flag);
+.rlms-cell.rlms-cell--flagged {
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
 }
 
-.minesweeper__cell--mine {
-  background: var(--cell-bg-revealed);
+.rlms-cell.rlms-cell--mine {
+  background: linear-gradient(180deg, rgba(255,92,122,.25), rgba(255,92,122,.08));
+  border-color: rgba(255,92,122,.35);
 }
 
-.minesweeper__cell--mine.minesweeper__cell--exploded {
-  background: var(--mine-red);
+.rlms-cell.rlms-cell--boom {
+  background: linear-gradient(180deg, rgba(255,92,122,.45), rgba(255,92,122,.15));
+  border-color: rgba(255,92,122,.55);
 }
 
-.minesweeper__cell--num-1 { color: var(--num-1); }
-.minesweeper__cell--num-2 { color: var(--num-2); }
-.minesweeper__cell--num-3 { color: var(--num-3); }
-.minesweeper__cell--num-4 { color: var(--num-4); }
-.minesweeper__cell--num-5 { color: var(--num-5); }
-.minesweeper__cell--num-6 { color: var(--num-6); }
-.minesweeper__cell--num-7 { color: var(--num-7); }
-.minesweeper__cell--num-8 { color: var(--num-8); }
-
-.minesweeper__cell--game-over {
-  cursor: default;
-}
+.rlms-cell.rlms-cell--n1 { color: #6aa8ff; }
+.rlms-cell.rlms-cell--n2 { color: #56d364; }
+.rlms-cell.rlms-cell--n3 { color: #ff7a59; }
+.rlms-cell.rlms-cell--n4 { color: #b48cff; }
+.rlms-cell.rlms-cell--n5 { color: #ff4d6d; }
+.rlms-cell.rlms-cell--n6 { color: #3dd6d0; }
+.rlms-cell.rlms-cell--n7 { color: #e9eef7; }
+.rlms-cell.rlms-cell--n8 { color: #b7c4d7; }
 
 @media (max-width: 768px) {
-  .minesweeper {
-    --cell-size: 20px;
+  .rlms-game {
+    --rlms-cell: 22px;
   }
 }

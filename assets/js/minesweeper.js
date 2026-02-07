@@ -1,188 +1,403 @@
+/**
+ * RLMS Minesweeper – merged implementation:
+ * - Minesweeper implementation by David Parkinson (game dynamics, visuals, first-click safe, chording, keyboard, timer).
+ * - Autosolver logic by David Hill, JSMinesweeper (trivial analysis, probability engine, 50/50, guessing).
+ */
 (function () {
   'use strict';
 
-  var PRESETS = {
-    beginner: { rows: 9, cols: 9, mines: 10 },
-    intermediate: { rows: 16, cols: 16, mines: 40 },
-    expert: { rows: 16, cols: 30, mines: 99 }
-  };
+  var boardEl = document.getElementById('minesweeper-board');
+  if (!boardEl) return;
 
-  var app = document.getElementById('minesweeper-app');
-  if (!app) return;
-
-  var gridEl = document.getElementById('minesweeper-grid');
+  var minesLeftEl = document.getElementById('minesweeper-mines-left');
+  var timeEl = document.getElementById('minesweeper-time');
   var statusEl = document.getElementById('minesweeper-status');
-  var minesEl = document.getElementById('minesweeper-mines');
-  var newGameBtn = document.getElementById('minesweeper-new-game');
+  var faceEl = document.getElementById('minesweeper-face');
+  var metaSizeEl = document.getElementById('minesweeper-meta-size');
+  var metaMinesEl = document.getElementById('minesweeper-meta-mines');
+  var presetEl = document.getElementById('minesweeper-preset');
+  var wEl = document.getElementById('minesweeper-w');
+  var hEl = document.getElementById('minesweeper-h');
+  var mEl = document.getElementById('minesweeper-m');
+  var newBtn = document.getElementById('minesweeper-new-game');
   var autosolveBtn = document.getElementById('minesweeper-autosolve');
-  var difficultySelect = document.getElementById('minesweeper-difficulty');
+  var resetBtn = document.getElementById('minesweeper-reset');
 
-  var state = {
-    rows: 0,
-    cols: 0,
-    mines: 0,
-    mineSet: null,
-    cells: null,
-    flags: 0,
-    revealed: 0,
-    started: false,
-    over: false,
-    timerId: null,
-    seconds: 0
-  };
+  var W = 9, H = 9, MINES = 10;
+  var firstClick = true;
+  var gameOver = false;
+  var revealedCount = 0;
+  var flagCount = 0;
+  var boomCell = null;
+  var grid = [];
+  var timer = 0;
+  var timerId = null;
+  var hovered = null;
+  var isAutosolving = false;
 
-  function getPreset() {
-    var key = difficultySelect ? difficultySelect.value : 'expert';
-    return PRESETS[key] || PRESETS.expert;
-  }
-
-  function initBoard() {
-    var p = getPreset();
-    state.rows = p.rows;
-    state.cols = p.cols;
-    state.mines = p.mines;
-    state.mineSet = null;
-    state.cells = [];
-    state.flags = 0;
-    state.revealed = 0;
-    state.started = false;
-    state.over = false;
-    if (state.timerId) clearInterval(state.timerId);
-    state.timerId = null;
-    state.seconds = 0;
-
-    for (var r = 0; r < state.rows; r++) {
-      state.cells[r] = [];
-      for (var c = 0; c < state.cols; c++) {
-        state.cells[r][c] = { revealed: false, flagged: false };
-      }
+  var dirs = [];
+  for (var dy = -1; dy <= 1; dy++) {
+    for (var dx = -1; dx <= 1; dx++) {
+      if (dx || dy) dirs.push([dx, dy]);
     }
   }
 
-  function placeMines(excludeR, excludeC) {
-    var set = {};
-    var count = 0;
-    var max = state.rows * state.cols;
-    while (count < state.mines) {
-      var r = Math.floor(Math.random() * state.rows);
-      var c = Math.floor(Math.random() * state.cols);
-      if (r === excludeR && c === excludeC) continue;
-      var id = r + ',' + c;
-      if (!set[id]) {
-        set[id] = true;
-        count++;
+  function key(x, y) { return x + ',' + y; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function inBounds(x, y) { return x >= 0 && x < W && y >= 0 && y < H; }
+  function idxOf(x, y) { return y * W + x; }
+
+  function stopTimer() {
+    if (timerId) {
+      clearInterval(timerId);
+      timerId = null;
+    }
+  }
+
+  function startTimer() {
+    if (timerId) return;
+    timerId = setInterval(function () {
+      timer++;
+      if (timeEl) timeEl.textContent = String(timer);
+    }, 1000);
+  }
+
+  function resetTimer() {
+    stopTimer();
+    timer = 0;
+    if (timeEl) timeEl.textContent = '0';
+  }
+
+  function applyPreset() {
+    var p = presetEl ? presetEl.value : 'beginner';
+    if (p === 'beginner') { W = 9; H = 9; MINES = 10; }
+    else if (p === 'intermediate') { W = 16; H = 16; MINES = 40; }
+    else if (p === 'expert') { W = 30; H = 16; MINES = 99; }
+    else {
+      W = parseInt(wEl.value, 10) || 9;
+      H = parseInt(hEl.value, 10) || 9;
+      MINES = parseInt(mEl.value, 10) || 10;
+    }
+    syncInputs();
+  }
+
+  function syncInputs() {
+    if (wEl) wEl.value = W;
+    if (hEl) hEl.value = H;
+    if (mEl) mEl.value = MINES;
+    if (metaSizeEl) metaSizeEl.textContent = W + '×' + H;
+    if (metaMinesEl) metaMinesEl.textContent = String(MINES);
+  }
+
+  function validateAndClamp() {
+    W = clamp(parseInt(wEl.value, 10) || 9, 5, 50);
+    H = clamp(parseInt(hEl.value, 10) || 9, 5, 50);
+    var maxM = W * H - 1;
+    MINES = clamp(parseInt(mEl.value, 10) || 10, 1, maxM);
+    if (wEl) wEl.value = W;
+    if (hEl) hEl.value = H;
+    if (mEl) mEl.value = MINES;
+    if (metaSizeEl) metaSizeEl.textContent = W + '×' + H;
+    if (metaMinesEl) metaMinesEl.textContent = String(MINES);
+  }
+
+  function setStatus(html, kind) {
+    if (!statusEl) return;
+    statusEl.className = 'rlms-status' + (kind ? ' rlms-status--' + kind : '');
+    statusEl.innerHTML = html;
+  }
+
+  function setFace(emoji) {
+    if (faceEl) faceEl.textContent = emoji;
+  }
+
+  function updateCellView(x, y) {
+    var c = grid[idxOf(x, y)];
+    var el = c.el;
+    if (!el) return;
+
+    el.classList.toggle('rlms-cell--revealed', c.revealed);
+    el.classList.toggle('rlms-cell--flagged', c.flagged);
+
+    if (!c.revealed) {
+      el.textContent = c.flagged ? '🚩' : '';
+      el.classList.remove('rlms-cell--mine', 'rlms-cell--boom');
+      for (var i = 1; i <= 8; i++) el.classList.remove('rlms-cell--n' + i);
+      return;
+    }
+
+    if (c.mine) {
+      el.textContent = '💣';
+      el.classList.add('rlms-cell--mine');
+      if (boomCell && boomCell.x === x && boomCell.y === y) el.classList.add('rlms-cell--boom');
+      return;
+    }
+
+    if (c.adj === 0) {
+      el.textContent = '';
+    } else {
+      el.textContent = String(c.adj);
+      el.classList.add('rlms-cell--n' + c.adj);
+    }
+  }
+
+  function updateMinesLeft() {
+    var left = Math.max(0, MINES - flagCount);
+    if (minesLeftEl) minesLeftEl.textContent = String(left);
+  }
+
+  function placeMinesSafe(safeX, safeY) {
+    var protectedSet = {};
+    protectedSet[key(safeX, safeY)] = true;
+    for (var i = 0; i < dirs.length; i++) {
+      var nx = safeX + dirs[i][0], ny = safeY + dirs[i][1];
+      if (inBounds(nx, ny)) protectedSet[key(nx, ny)] = true;
+    }
+
+    var candidates = [];
+    for (var y = 0; y < H; y++) {
+      for (var x = 0; x < W; x++) {
+        if (!protectedSet[key(x, y)]) candidates.push([x, y]);
       }
     }
-    state.mineSet = set;
-  }
 
-  function isMine(r, c) {
-    return state.mineSet && state.mineSet[r + ',' + c];
-  }
-
-  function countAdjacentMines(r, c) {
-    var n = 0;
-    for (var dr = -1; dr <= 1; dr++) {
-      for (var dc = -1; dc <= 1; dc++) {
-        if (dr === 0 && dc === 0) continue;
-        var nr = r + dr, nc = c + dc;
-        if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols && isMine(nr, nc)) n++;
-      }
-    }
-    return n;
-  }
-
-  function countAdjacentFlags(r, c) {
-    var n = 0;
-    for (var dr = -1; dr <= 1; dr++) {
-      for (var dc = -1; dc <= 1; dc++) {
-        if (dr === 0 && dc === 0) continue;
-        var nr = r + dr, nc = c + dc;
-        if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols && state.cells[nr][nc].flagged) n++;
-      }
-    }
-    return n;
-  }
-
-  function getAdjacentHidden(r, c) {
-    var out = [];
-    for (var dr = -1; dr <= 1; dr++) {
-      for (var dc = -1; dc <= 1; dc++) {
-        if (dr === 0 && dc === 0) continue;
-        var nr = r + dr, nc = c + dc;
-        if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols) {
-          var cell = state.cells[nr][nc];
-          if (!cell.revealed && !cell.flagged) out.push([nr, nc]);
+    if (candidates.length < MINES) {
+      candidates = [];
+      for (var y = 0; y < H; y++) {
+        for (var x = 0; x < W; x++) {
+          if (!(x === safeX && y === safeY)) candidates.push([x, y]);
         }
       }
+    }
+
+    for (var i = candidates.length - 1; i > 0; i--) {
+      var j = (Math.random() * (i + 1)) | 0;
+      var t = candidates[i];
+      candidates[i] = candidates[j];
+      candidates[j] = t;
+    }
+
+    for (var i = 0; i < MINES; i++) {
+      var xy = candidates[i];
+      grid[idxOf(xy[0], xy[1])].mine = true;
+    }
+
+    for (var y = 0; y < H; y++) {
+      for (var x = 0; x < W; x++) {
+        var cell = grid[idxOf(x, y)];
+        if (cell.mine) { cell.adj = 0; continue; }
+        var n = 0;
+        for (var d = 0; d < dirs.length; d++) {
+          var nx = x + dirs[d][0], ny = y + dirs[d][1];
+          if (inBounds(nx, ny) && grid[idxOf(nx, ny)].mine) n++;
+        }
+        cell.adj = n;
+      }
+    }
+  }
+
+  function toggleFlag(x, y) {
+    var c = grid[idxOf(x, y)];
+    if (c.revealed) return;
+    c.flagged = !c.flagged;
+    flagCount += c.flagged ? 1 : -1;
+    updateCellView(x, y);
+    updateMinesLeft();
+    checkWin();
+  }
+
+  function reveal(x, y) {
+    if (!inBounds(x, y)) return;
+    var c0 = grid[idxOf(x, y)];
+    if (c0.revealed || c0.flagged) return;
+
+    if (firstClick) {
+      firstClick = false;
+      placeMinesSafe(x, y);
+      startTimer();
+    }
+
+    if (c0.mine) {
+      c0.revealed = true;
+      boomCell = { x: x, y: y };
+      updateCellView(x, y);
+      endGame(false);
+      return;
+    }
+
+    var q = [[x, y]];
+    var seen = {};
+    seen[key(x, y)] = true;
+
+    while (q.length) {
+      var cx = q[0][0], cy = q[0][1];
+      q.shift();
+      var cell = grid[idxOf(cx, cy)];
+      if (cell.revealed || cell.flagged) continue;
+      cell.revealed = true;
+      revealedCount++;
+      updateCellView(cx, cy);
+
+      if (cell.adj === 0) {
+        for (var d = 0; d < dirs.length; d++) {
+          var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+          if (!inBounds(nx, ny)) continue;
+          var nk = key(nx, ny);
+          if (seen[nk]) continue;
+          var nc = grid[idxOf(nx, ny)];
+          if (!nc.revealed && !nc.flagged) {
+            seen[nk] = true;
+            q.push([nx, ny]);
+          }
+        }
+      }
+    }
+
+    checkWin();
+  }
+
+  function chord(x, y) {
+    var c = grid[idxOf(x, y)];
+    if (!c.revealed || c.adj === 0) return;
+
+    var flags = 0;
+    var neighbors = [];
+    for (var d = 0; d < dirs.length; d++) {
+      var nx = x + dirs[d][0], ny = y + dirs[d][1];
+      if (!inBounds(nx, ny)) continue;
+      var nc = grid[idxOf(nx, ny)];
+      neighbors.push([nx, ny, nc]);
+      if (nc.flagged) flags++;
+    }
+    if (flags !== c.adj) return;
+
+    for (var i = 0; i < neighbors.length; i++) {
+      var n = neighbors[i];
+      if (!n[2].flagged && !n[2].revealed) reveal(n[0], n[1]);
+    }
+  }
+
+  function revealAllMines() {
+    for (var y = 0; y < H; y++) {
+      for (var x = 0; x < W; x++) {
+        var c = grid[idxOf(x, y)];
+        if (c.mine) {
+          c.revealed = true;
+          updateCellView(x, y);
+        } else if (gameOver && c.flagged && !c.mine) {
+          c.el.textContent = '❌';
+          c.el.classList.add('rlms-cell--revealed');
+        }
+      }
+    }
+  }
+
+  function endGame(win) {
+    gameOver = true;
+    stopTimer();
+    if (win) {
+      setFace('😎');
+      setStatus('<b>Status:</b> You win! 🎉 Cleared in <b>' + timer + '</b>s.', 'win');
+    } else {
+      setFace('💀');
+      revealAllMines();
+      setStatus('<b>Status:</b> Boom. 💥 Click <span class="rlms-kbd">New Game</span> to try again.', 'lose');
+    }
+  }
+
+  function checkWin() {
+    if (gameOver || firstClick) return;
+    var safeCells = W * H - MINES;
+    if (revealedCount >= safeCells) {
+      for (var y = 0; y < H; y++) {
+        for (var x = 0; x < W; x++) {
+          var c = grid[idxOf(x, y)];
+          if (!c.revealed && c.mine && !c.flagged) {
+            c.flagged = true;
+            flagCount++;
+            updateCellView(x, y);
+          }
+        }
+      }
+      updateMinesLeft();
+      endGame(true);
+    }
+  }
+
+  // ---------- David Hill–style autosolver ----------
+  function countAdjacentFlags(x, y) {
+    var n = 0;
+    for (var d = 0; d < dirs.length; d++) {
+      var nx = x + dirs[d][0], ny = y + dirs[d][1];
+      if (inBounds(nx, ny) && grid[idxOf(nx, ny)].flagged) n++;
+    }
+    return n;
+  }
+
+  function getAdjacentHidden(x, y) {
+    var out = [];
+    for (var d = 0; d < dirs.length; d++) {
+      var nx = x + dirs[d][0], ny = y + dirs[d][1];
+      if (!inBounds(nx, ny)) continue;
+      var c = grid[idxOf(nx, ny)];
+      if (!c.revealed && !c.flagged) out.push([nx, ny]);
     }
     return out;
   }
 
-  /**
-   * Trivial analysis (after David Hill's JSMinesweeper solver).
-   * Satisfied tile: number equals adjacent flags -> remaining adjacent are safe to reveal.
-   * Full mines: (number - adjacent flags) === count of adjacent hidden -> those hidden are all mines.
-   */
   function trivialAnalysis() {
     var toReveal = {};
     var toFlag = {};
-    var r, c, cell, num, adjFlags, hidden, i, key;
+    var x, y, cell, num, adjFlags, hidden, i, k;
 
-    for (r = 0; r < state.rows; r++) {
-      for (c = 0; c < state.cols; c++) {
-        cell = state.cells[r][c];
-        if (!cell.revealed || cell.count == null || cell.count === 0) continue;
-        num = cell.count;
-        adjFlags = countAdjacentFlags(r, c);
-        hidden = getAdjacentHidden(r, c);
+    for (y = 0; y < H; y++) {
+      for (x = 0; x < W; x++) {
+        cell = grid[idxOf(x, y)];
+        if (!cell.revealed || cell.adj === 0) continue;
+        num = cell.adj;
+        adjFlags = countAdjacentFlags(x, y);
+        hidden = getAdjacentHidden(x, y);
         if (hidden.length === 0) continue;
 
         if (adjFlags === num) {
           for (i = 0; i < hidden.length; i++) {
-            key = hidden[i][0] + ',' + hidden[i][1];
-            toReveal[key] = hidden[i];
+            k = key(hidden[i][0], hidden[i][1]);
+            toReveal[k] = hidden[i];
           }
         } else if (num - adjFlags === hidden.length) {
           for (i = 0; i < hidden.length; i++) {
-            key = hidden[i][0] + ',' + hidden[i][1];
-            toFlag[key] = hidden[i];
+            k = key(hidden[i][0], hidden[i][1]);
+            toFlag[k] = hidden[i];
           }
         }
       }
     }
 
     var revealList = [];
-    for (key in toReveal) revealList.push(toReveal[key]);
+    for (k in toReveal) revealList.push(toReveal[k]);
     var flagList = [];
-    for (key in toFlag) flagList.push(toFlag[key]);
+    for (k in toFlag) flagList.push(toFlag[k]);
 
     if (revealList.length === 0 && flagList.length === 0) return null;
     return { toReveal: revealList, toFlag: flagList };
   }
-
-  // --- Full solver (David Hill style): probability engine, 50/50, guessing ---
 
   var MAX_FRONTIER_FOR_PROB = 22;
   var PROBABILITY_ENGINE_TIMEOUT_MS = 3000;
 
   function getFrontier() {
     var set = {};
-    var r, c, dr, dc, nr, nc, cell;
-    for (r = 0; r < state.rows; r++) {
-      for (c = 0; c < state.cols; c++) {
-        cell = state.cells[r][c];
-        if (!cell.revealed && !cell.flagged) continue;
-        if (cell.revealed) {
-          for (dr = -1; dr <= 1; dr++) {
-            for (dc = -1; dc <= 1; dc++) {
-              if (dr === 0 && dc === 0) continue;
-              nr = r + dr; nc = c + dc;
-              if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols && !state.cells[nr][nc].revealed && !state.cells[nr][nc].flagged) {
-                set[nr + ',' + nc] = [nr, nc];
-              }
-            }
-          }
+    var x, y, d, nx, ny, cell;
+    for (y = 0; y < H; y++) {
+      for (x = 0; x < W; x++) {
+        cell = grid[idxOf(x, y)];
+        if (!cell.revealed) continue;
+        for (d = 0; d < dirs.length; d++) {
+          nx = x + dirs[d][0];
+          ny = y + dirs[d][1];
+          if (!inBounds(nx, ny)) continue;
+          var nc = grid[idxOf(nx, ny)];
+          if (!nc.revealed && !nc.flagged) set[key(nx, ny)] = [nx, ny];
         }
       }
     }
@@ -193,17 +408,17 @@
 
   function getConstraints(frontierSet) {
     var constraints = [];
-    var r, c, cell, need, hidden, indices, i, id;
-    for (r = 0; r < state.rows; r++) {
-      for (c = 0; c < state.cols; c++) {
-        cell = state.cells[r][c];
-        if (!cell.revealed || cell.count == null) continue;
-        need = cell.count - countAdjacentFlags(r, c);
-        hidden = getAdjacentHidden(r, c);
+    var x, y, cell, need, hidden, indices, i, id;
+    for (y = 0; y < H; y++) {
+      for (x = 0; x < W; x++) {
+        cell = grid[idxOf(x, y)];
+        if (!cell.revealed || cell.adj == null) continue;
+        need = cell.adj - countAdjacentFlags(x, y);
+        hidden = getAdjacentHidden(x, y);
         if (hidden.length === 0) continue;
         indices = [];
         for (i = 0; i < hidden.length; i++) {
-          id = hidden[i][0] + ',' + hidden[i][1];
+          id = key(hidden[i][0], hidden[i][1]);
           if (frontierSet[id] !== undefined) indices.push(frontierSet[id]);
         }
         if (indices.length > 0) constraints.push({ indices: indices, need: need });
@@ -255,8 +470,8 @@
 
     var probs = {};
     for (i = 0; i < F; i++) {
-      var key = frontier[i][0] + ',' + frontier[i][1];
-      probs[key] = totalSolutions === 0 ? 0.5 : mineCounts[i] / totalSolutions;
+      var k = key(frontier[i][0], frontier[i][1]);
+      probs[k] = totalSolutions === 0 ? 0.5 : mineCounts[i] / totalSolutions;
     }
     return { probs: probs, totalSolutions: totalSolutions, mineCounts: mineCounts };
   }
@@ -268,9 +483,7 @@
       inds = constraints[c].indices;
       need = constraints[c].need;
       if (inds.length === 2 && need === 1) {
-        var r0 = frontier[inds[0]][0], c0 = frontier[inds[0]][1];
-        var r1 = frontier[inds[1]][0], c1 = frontier[inds[1]][1];
-        pairs.push([[r0, c0], [r1, c1]]);
+        pairs.push([frontier[inds[0]], frontier[inds[1]]]);
       }
     }
     return pairs;
@@ -278,38 +491,35 @@
 
   function guessingLogic(probs, frontier, frontierSet) {
     var safest = 1;
-    var i, j, key, p, r, c, nr, nc, adjKey, maxAdjP, score;
+    var i, k, p, x, y, nx, ny, adjKey, maxAdjP, score;
     for (i = 0; i < frontier.length; i++) {
-      key = frontier[i][0] + ',' + frontier[i][1];
-      p = probs[key];
+      k = key(frontier[i][0], frontier[i][1]);
+      p = probs[k];
       if (p < safest) safest = p;
     }
     var cutoff = Math.min(1, safest + 0.1);
     var candidates = [];
     for (i = 0; i < frontier.length; i++) {
-      r = frontier[i][0];
-      c = frontier[i][1];
-      key = r + ',' + c;
-      p = probs[key];
+      x = frontier[i][0];
+      y = frontier[i][1];
+      k = key(x, y);
+      p = probs[k];
       if (p > cutoff) continue;
       maxAdjP = 0;
-      for (var dr = -1; dr <= 1; dr++) {
-        for (var dc = -1; dc <= 1; dc++) {
-          if (dr === 0 && dc === 0) continue;
-          nr = r + dr;
-          nc = c + dc;
-          if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols) {
-            adjKey = nr + ',' + nc;
-            if (probs[adjKey] !== undefined && probs[adjKey] > maxAdjP) maxAdjP = probs[adjKey];
-          }
+      for (var d = 0; d < dirs.length; d++) {
+        nx = x + dirs[d][0];
+        ny = y + dirs[d][1];
+        if (inBounds(nx, ny)) {
+          adjKey = key(nx, ny);
+          if (probs[adjKey] !== undefined && probs[adjKey] > maxAdjP) maxAdjP = probs[adjKey];
         }
       }
       score = (1 - p) + 0.2 * (1 - maxAdjP);
-      candidates.push({ r: r, c: c, p: p, score: score });
+      candidates.push({ x: x, y: y, p: p, score: score });
     }
     if (candidates.length === 0) return null;
     candidates.sort(function (a, b) { return b.score - a.score; });
-    return [candidates[0].r, candidates[0].c];
+    return [candidates[0].x, candidates[0].y];
   }
 
   function fullSolver(acceptGuesses) {
@@ -323,15 +533,15 @@
 
     var frontierSet = {};
     for (var i = 0; i < frontier.length; i++) {
-      frontierSet[frontier[i][0] + ',' + frontier[i][1]] = i;
+      frontierSet[key(frontier[i][0], frontier[i][1])] = i;
     }
     var constraints = getConstraints(frontierSet);
-    var remainingMines = state.mines - state.flags;
-    var totalHidden = state.rows * state.cols - state.revealed - state.flags;
+    var remainingMines = MINES - flagCount;
+    var totalHidden = W * H - revealedCount - flagCount;
     var otherHiddenCount = totalHidden - frontier.length;
 
     if (frontier.length > MAX_FRONTIER_FOR_PROB) {
-      var guessCell = frontier[Math.floor(Math.random() * frontier.length)];
+      var guessCell = frontier[(Math.random() * frontier.length) | 0];
       if (acceptGuesses) return { toReveal: [], toFlag: [], guess: guessCell, method: 'random' };
       return { toReveal: [], toFlag: [], guess: null, method: 'stuck' };
     }
@@ -342,10 +552,10 @@
     var safeReveal = [];
     var toFlag = [];
     for (i = 0; i < frontier.length; i++) {
-      var key = frontier[i][0] + ',' + frontier[i][1];
-      var p = probs[key];
-      if (p <= 0) safeReveal.push(frontier[i]);
-      if (p >= 1) toFlag.push(frontier[i]);
+      var keyStr = key(frontier[i][0], frontier[i][1]);
+      var prob = probs[keyStr];
+      if (prob <= 0) safeReveal.push(frontier[i]);
+      if (prob >= 1) toFlag.push(frontier[i]);
     }
     if (safeReveal.length > 0 || toFlag.length > 0) {
       return { toReveal: safeReveal, toFlag: toFlag, guess: null, method: 'probability' };
@@ -367,217 +577,196 @@
   }
 
   function runAutosolve() {
-    if (state.over || !state.mineSet) return;
+    if (gameOver) return;
+    if (!grid.length || firstClick) {
+      setStatus('<b>Status:</b> Make at least one click to start the board, then run Autosolve.', '');
+      return;
+    }
+    isAutosolving = true;
     startTimer();
 
-    var total = state.rows * state.cols - state.mines;
+    var total = W * H - MINES;
     var acceptGuesses = true;
     var maxSteps = 500;
     var steps = 0;
+    var move, i, xy;
 
-    while (!state.over && state.revealed < total && steps < maxSteps) {
+    while (!gameOver && revealedCount < total && steps < maxSteps) {
       steps++;
-      var move = fullSolver(acceptGuesses);
+      move = fullSolver(acceptGuesses);
       if (!move) break;
 
-      var i, r, c;
       for (i = 0; i < move.toFlag.length; i++) {
-        r = move.toFlag[i][0];
-        c = move.toFlag[i][1];
-        if (!state.cells[r][c].flagged) {
-          state.cells[r][c].flagged = true;
-          state.flags++;
+        xy = move.toFlag[i];
+        if (!grid[idxOf(xy[0], xy[1])].flagged) {
+          toggleFlag(xy[0], xy[1]);
         }
       }
       for (i = 0; i < move.toReveal.length; i++) {
-        r = move.toReveal[i][0];
-        c = move.toReveal[i][1];
-        if (!state.cells[r][c].revealed && !state.cells[r][c].flagged) {
-          reveal(r, c);
-          if (state.over) break;
+        xy = move.toReveal[i];
+        if (!grid[idxOf(xy[0], xy[1])].revealed && !grid[idxOf(xy[0], xy[1])].flagged) {
+          reveal(xy[0], xy[1]);
+          if (gameOver) break;
         }
       }
-      if (state.over) break;
+      if (gameOver) break;
       if (move.guess && acceptGuesses) {
-        r = move.guess[0];
-        c = move.guess[1];
-        if (!state.cells[r][c].revealed && !state.cells[r][c].flagged) {
-          reveal(r, c);
+        xy = move.guess;
+        if (!grid[idxOf(xy[0], xy[1])].revealed && !grid[idxOf(xy[0], xy[1])].flagged) {
+          reveal(xy[0], xy[1]);
         }
       } else if (move.guess && !acceptGuesses) {
-        if (statusEl) statusEl.textContent = 'No safe move (guess required)';
+        setStatus('<b>Status:</b> No safe move (guess required).', '');
         break;
       } else if (move.toReveal.length === 0 && move.toFlag.length === 0 && !move.guess) {
         break;
       }
     }
 
-    if (!state.over && state.revealed < total) {
+    if (!gameOver && revealedCount < total) {
       if (statusEl && statusEl.textContent.indexOf('guess') === -1) {
-        statusEl.textContent = 'Solver stuck (try clicking once and Autosolve again)';
-      }
-    }
-    updateStatus();
-    render();
-  }
-
-  function startTimer() {
-    if (state.timerId) return;
-    state.timerId = setInterval(function () {
-      state.seconds++;
-      updateStatus();
-    }, 1000);
-  }
-
-  function stopTimer() {
-    if (state.timerId) {
-      clearInterval(state.timerId);
-      state.timerId = null;
-    }
-  }
-
-  function reveal(r, c) {
-    if (r < 0 || r >= state.rows || c < 0 || c >= state.cols) return;
-    var cell = state.cells[r][c];
-    if (cell.revealed || cell.flagged || state.over) return;
-
-    if (!state.mineSet) {
-      placeMines(r, c);
-      state.started = true;
-      startTimer();
-    }
-
-    if (isMine(r, c)) {
-      state.over = true;
-      stopTimer();
-      cell.revealed = true;
-      cell.exploded = true;
-      revealAllMines();
-      updateStatus();
-      render();
-      return;
-    }
-
-    cell.revealed = true;
-    state.revealed++;
-    var count = countAdjacentMines(r, c);
-    cell.count = count;
-
-    if (count === 0) {
-      for (var dr = -1; dr <= 1; dr++) {
-        for (var dc = -1; dc <= 1; dc++) {
-          reveal(r + dr, c + dc);
-        }
+        setStatus('<b>Status:</b> Solver stuck. Try clicking once and Autosolve again.', '');
       }
     }
 
-    var total = state.rows * state.cols - state.mines;
-    if (state.revealed >= total) {
-      state.over = true;
-      stopTimer();
-      state.won = true;
-    }
-    updateStatus();
-    render();
-  }
-
-  function revealAllMines() {
-    for (var r = 0; r < state.rows; r++) {
-      for (var c = 0; c < state.cols; c++) {
-        if (isMine(r, c)) state.cells[r][c].revealed = true;
-      }
-    }
-  }
-
-  function toggleFlag(r, c) {
-    if (state.over) return;
-    var cell = state.cells[r][c];
-    if (cell.revealed) return;
-    cell.flagged = !cell.flagged;
-    state.flags += cell.flagged ? 1 : -1;
-    updateStatus();
-    render();
-  }
-
-  function updateStatus() {
-    if (!statusEl) return;
-    if (state.over) {
-      statusEl.textContent = state.won ? 'You win!' : 'Game over';
-    } else {
-      statusEl.textContent = state.started ? 'Playing' : 'Click to start';
-    }
-    if (minesEl) {
-      minesEl.textContent = 'Mines: ' + (state.mines - state.flags);
-      if (state.started && !state.over) {
-        minesEl.textContent += ' | Time: ' + state.seconds + 's';
-      }
-    }
-  }
-
-  function render() {
-    if (!gridEl) return;
-    gridEl.innerHTML = '';
-    gridEl.style.gridTemplateColumns = 'repeat(' + state.cols + ', var(--cell-size))';
-
-    for (var r = 0; r < state.rows; r++) {
-      for (var c = 0; c < state.cols; c++) {
-        var cell = state.cells[r][c];
-        var div = document.createElement('div');
-        div.className = 'minesweeper__cell';
-        div.setAttribute('role', 'gridcell');
-        div.dataset.r = r;
-        div.dataset.c = c;
-
-        if (state.over) div.classList.add('minesweeper__cell--game-over');
-        if (cell.revealed) {
-          div.classList.add('minesweeper__cell--revealed');
-          if (cell.exploded) {
-            div.classList.add('minesweeper__cell--mine', 'minesweeper__cell--exploded');
-            div.textContent = '*';
-          } else if (isMine(r, c)) {
-            div.classList.add('minesweeper__cell--mine');
-            div.textContent = '*';
-          } else if (cell.count > 0) {
-            div.classList.add('minesweeper__cell--num-' + cell.count);
-            div.textContent = cell.count;
-          }
-        } else {
-          if (cell.flagged) {
-            div.classList.add('minesweeper__cell--flagged');
-            div.textContent = 'F';
-          }
-        }
-
-        gridEl.appendChild(div);
-      }
-    }
-  }
-
-  function handleClick(e) {
-    var cell = e.target.closest('.minesweeper__cell');
-    if (!cell || state.over) return;
-    var r = parseInt(cell.dataset.r, 10);
-    var c = parseInt(cell.dataset.c, 10);
-    if (e.button === 0) reveal(r, c);
-    if (e.button === 2) {
-      e.preventDefault();
-      toggleFlag(r, c);
+    isAutosolving = false;
+    if (statusEl && !gameOver && revealedCount < total && statusEl.textContent.indexOf('guess') === -1) {
+      setStatus('<b>Status:</b> Solver stuck. Try clicking once and Autosolve again.', '');
     }
   }
 
   function newGame() {
-    initBoard();
-    updateStatus();
-    render();
+    validateAndClamp();
+    gameOver = false;
+    firstClick = true;
+    revealedCount = 0;
+    flagCount = 0;
+    boomCell = null;
+    hovered = null;
+    setFace('🙂');
+    resetTimer();
+
+    boardEl.style.setProperty('--rlms-cell', W >= 30 ? '24px' : (W >= 20 ? '26px' : '28px'));
+    boardEl.style.gridTemplateColumns = 'repeat(' + W + ', var(--rlms-cell))';
+
+    grid = [];
+    for (var i = 0; i < W * H; i++) {
+      grid.push({ mine: false, adj: 0, revealed: false, flagged: false, el: null });
+    }
+
+    boardEl.innerHTML = '';
+    for (var y = 0; y < H; y++) {
+      for (var x = 0; x < W; x++) {
+        var idx = idxOf(x, y);
+        var d = document.createElement('div');
+        d.className = 'rlms-cell';
+        d.setAttribute('role', 'button');
+        d.setAttribute('tabindex', '-1');
+        d.setAttribute('aria-label', 'cell ' + (x + 1) + ',' + (y + 1));
+        d.dataset.x = x;
+        d.dataset.y = y;
+
+        d.addEventListener('mouseenter', function (xx, yy) {
+          return function () { hovered = { x: xx, y: yy }; };
+        }(x, y));
+        d.addEventListener('mouseleave', function (xx, yy) {
+          return function () {
+            if (hovered && hovered.x === xx && hovered.y === yy) hovered = null;
+          };
+        }(x, y));
+
+        d.addEventListener('mousedown', function (e) {
+          if (gameOver) return;
+          if (e.button === 0) setFace('😮');
+        });
+
+        d.addEventListener('mouseup', function () {
+          if (gameOver) return;
+          setFace('🙂');
+        });
+
+        d.addEventListener('click', function (e) {
+          if (gameOver) return;
+          if (e.shiftKey) chord(x, y);
+          else reveal(x, y);
+        });
+
+        d.addEventListener('auxclick', function (e) {
+          if (gameOver) return;
+          if (e.button === 1) {
+            e.preventDefault();
+            chord(x, y);
+          }
+        });
+
+        d.addEventListener('contextmenu', function (e) {
+          e.preventDefault();
+          if (gameOver) return;
+          toggleFlag(x, y);
+        });
+
+        var pressTimer = null;
+        d.addEventListener('touchstart', function () {
+          if (gameOver) return;
+          pressTimer = setTimeout(function () {
+            toggleFlag(x, y);
+            pressTimer = null;
+          }, 450);
+        }, { passive: true });
+        d.addEventListener('touchend', function () {
+          if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+          }
+        });
+
+        grid[idx].el = d;
+        boardEl.appendChild(d);
+      }
+    }
+
+    updateMinesLeft();
+    setStatus('<b>Status:</b> Ready. <span class="rlms-kbd">Right-click</span> to flag, <span class="rlms-kbd">Space</span> while hovering to flag, <span class="rlms-kbd">Shift+click</span>/<span class="rlms-kbd">Middle-click</span> or <span class="rlms-kbd">Space</span> on a number to chord. Game by David Parkinson; autosolver by David Hill.', '');
   }
 
-  if (gridEl) {
-    gridEl.addEventListener('click', function (e) { handleClick(e); });
-    gridEl.addEventListener('contextmenu', function (e) { e.preventDefault(); handleClick(e); });
-  }
-  if (newGameBtn) newGameBtn.addEventListener('click', newGame);
+  boardEl.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  window.addEventListener('keydown', function (e) {
+    if ((e.key === ' ' || e.key === 'Spacebar' || e.code === 'Space') && hovered && !gameOver) {
+      e.preventDefault();
+      var x = hovered.x, y = hovered.y;
+      var c = grid[idxOf(x, y)];
+      if (c.revealed && c.adj > 0) chord(x, y);
+      else if (!c.revealed) toggleFlag(x, y);
+    }
+  }, { passive: false });
+
+  if (presetEl) presetEl.addEventListener('change', function () {
+    if (presetEl.value !== 'custom') {
+      applyPreset();
+      newGame();
+    }
+  });
+
+  [wEl, hEl, mEl].forEach(function (el) {
+    if (el) el.addEventListener('input', function () { if (presetEl) presetEl.value = 'custom'; });
+  });
+
+  if (newBtn) newBtn.addEventListener('click', function () {
+    applyPreset();
+    newGame();
+  });
+
+  if (resetBtn) resetBtn.addEventListener('click', function () {
+    if (presetEl) presetEl.value = 'beginner';
+    applyPreset();
+    newGame();
+  });
+
+  if (faceEl) faceEl.addEventListener('click', newGame);
+
   if (autosolveBtn) autosolveBtn.addEventListener('click', runAutosolve);
-  if (difficultySelect) difficultySelect.addEventListener('change', newGame);
 
+  applyPreset();
   newGame();
 })();

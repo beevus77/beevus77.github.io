@@ -7,7 +7,7 @@ author_profile: false
 
 {% include base_path %}
 
-This game was vibe coded and modeled after [JSMinesweeper](https://davidnhill.github.io/JSMinesweeper/) by David Hill. It's a simplified playable clone—not the full analyzer or solver from the original. Credit and thanks to David Hill.
+Minesweeper implementation by David Parkinson. Autosolver logic by [David Hill](https://davidnhill.github.io/JSMinesweeper/) (JSMinesweeper). Credit and thanks to both.
 
 {% include minesweeper.html %}
 

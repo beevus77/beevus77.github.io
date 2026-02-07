@@ -1,19 +1,86 @@
 {% include base_path %}
 <link rel="stylesheet" href="{{ base_path }}/assets/css/minesweeper.css">
 
-<div id="minesweeper-app" class="minesweeper">
-  <div class="minesweeper__controls">
-    <select id="minesweeper-difficulty" class="minesweeper__select" aria-label="Difficulty">
-      <option value="beginner">Beginner (9×9, 10 mines)</option>
-      <option value="intermediate">Intermediate (16×16, 40 mines)</option>
-      <option value="expert" selected>Expert (30×16, 99 mines)</option>
-    </select>
-    <button type="button" id="minesweeper-new-game" class="minesweeper__btn">New game</button>
-    <button type="button" id="minesweeper-autosolve" class="minesweeper__btn">Autosolve</button>
-    <span class="minesweeper__status" id="minesweeper-status" aria-live="polite"></span>
-    <span class="minesweeper__mines" id="minesweeper-mines"></span>
+<div class="rlms-game">
+  <div class="rlms-app">
+    <div class="rlms-card">
+      <div class="rlms-head">
+        <h2 class="rlms-title">🧨 Minesweeper</h2>
+        <p class="rlms-subtitle">Left-click to reveal. Right-click to flag. First click is always safe. Minesweeper implementation by David Parkinson. Autosolver logic by <a href="https://davidnhill.github.io/JSMinesweeper/" target="_blank" rel="noopener">David Hill</a> (JSMinesweeper).</p>
+      </div>
+      <div class="rlms-body">
+        <div>
+          <label for="minesweeper-preset">Difficulty</label>
+          <select id="minesweeper-preset" aria-label="Difficulty">
+            <option value="beginner">Beginner (9×9, 10)</option>
+            <option value="intermediate">Intermediate (16×16, 40)</option>
+            <option value="expert">Expert (30×16, 99)</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+
+        <div class="rlms-grid2" style="margin-top:12px;">
+          <div>
+            <label for="minesweeper-w">Width</label>
+            <input id="minesweeper-w" type="number" min="5" max="50" value="9" aria-label="Width" />
+          </div>
+          <div>
+            <label for="minesweeper-h">Height</label>
+            <input id="minesweeper-h" type="number" min="5" max="50" value="9" aria-label="Height" />
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <label for="minesweeper-m">Mines</label>
+            <input id="minesweeper-m" type="number" min="1" max="2499" value="10" aria-label="Mines" />
+          </div>
+        </div>
+
+        <div class="rlms-btns">
+          <button type="button" class="rlms-btn rlms-btn--primary" id="minesweeper-new-game">New Game</button>
+          <button type="button" class="rlms-btn" id="minesweeper-autosolve">Autosolve</button>
+          <button type="button" class="rlms-btn rlms-btn--danger" id="minesweeper-reset">Reset</button>
+        </div>
+
+        <div class="rlms-statbar">
+          <div class="rlms-pill">
+            <div class="rlms-pill__big" id="minesweeper-mines-left">10</div>
+            <div><small>Mines left</small></div>
+          </div>
+          <div class="rlms-pill">
+            <div class="rlms-pill__big" id="minesweeper-time">0</div>
+            <div><small>Seconds</small></div>
+          </div>
+        </div>
+
+        <div class="rlms-status" id="minesweeper-status" aria-live="polite">
+          <b>Status:</b> Ready. <span class="rlms-kbd">Right-click</span> to flag, <span class="rlms-kbd">Shift+click</span> or <span class="rlms-kbd">Middle-click</span> to chord.
+        </div>
+
+        <p class="rlms-footer-tip">
+          Mobile: long-press to flag. <span class="rlms-kbd">Space</span> while hovering to flag or chord.
+        </p>
+      </div>
+    </div>
+
+    <div class="rlms-card">
+      <div class="rlms-board-wrap">
+        <div class="rlms-board-top">
+          <div class="rlms-face" id="minesweeper-face" title="Restart">🙂</div>
+          <div class="rlms-meta">
+            <div class="rlms-meta-box">
+              <span>Board</span>
+              <strong id="minesweeper-meta-size">9×9</strong>
+            </div>
+            <div class="rlms-meta-box">
+              <span>Mines</span>
+              <strong id="minesweeper-meta-mines">10</strong>
+            </div>
+          </div>
+        </div>
+
+        <div id="minesweeper-board" class="rlms-grid" role="grid" aria-label="Minesweeper board"></div>
+      </div>
+    </div>
   </div>
-  <div id="minesweeper-grid" class="minesweeper__grid" role="grid" aria-label="Minesweeper board"></div>
 </div>
 
 <script src="{{ base_path }}/assets/js/minesweeper.js"></script>
