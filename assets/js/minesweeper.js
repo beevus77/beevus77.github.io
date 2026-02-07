@@ -692,7 +692,7 @@
     }
 
     updateMinesLeft();
-    setStatus('<b>Status:</b> Ready. <span class="rlms-kbd">Right-click</span> to flag, <span class="rlms-kbd">Space</span> while hovering to flag, <span class="rlms-kbd">Shift+click</span>/<span class="rlms-kbd">Middle-click</span> or <span class="rlms-kbd">Space</span> on a number to chord. Game by David Parkinson; autosolver by David Hill.', '');
+    setStatus('<b>Status:</b> Ready. <span class="rlms-kbd">Right-click</span> to flag, <span class="rlms-kbd">Space</span> while hovering to flag, <span class="rlms-kbd">Shift+click</span>/<span class="rlms-kbd">Middle-click</span> or <span class="rlms-kbd">Space</span> on a number to chord. Game vibe coded by David Parkinson and GPT; autosolver based on David Hill.', '');
   }
 
   function getCellFromEvent(e) {
