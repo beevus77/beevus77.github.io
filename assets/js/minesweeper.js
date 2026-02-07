@@ -685,43 +685,6 @@
           setFace('🙂');
         });
 
-        (function (cx, cy) {
-          d.addEventListener('click', function (e) {
-            if (gameOver) return;
-            if (e.shiftKey) chord(cx, cy);
-            else reveal(cx, cy);
-          });
-
-          d.addEventListener('auxclick', function (e) {
-            if (gameOver) return;
-            if (e.button === 1) {
-              e.preventDefault();
-              chord(cx, cy);
-            }
-          });
-
-          d.addEventListener('contextmenu', function (e) {
-            e.preventDefault();
-            if (gameOver) return;
-            toggleFlag(cx, cy);
-          });
-
-          var pressTimer = null;
-          d.addEventListener('touchstart', function () {
-            if (gameOver) return;
-            pressTimer = setTimeout(function () {
-              toggleFlag(cx, cy);
-              pressTimer = null;
-            }, 450);
-          }, { passive: true });
-          d.addEventListener('touchend', function () {
-            if (pressTimer) {
-              clearTimeout(pressTimer);
-              pressTimer = null;
-            }
-          });
-        }(x, y));
-
         grid[idx].el = d;
         boardEl.appendChild(d);
       }
@@ -731,7 +694,36 @@
     setStatus('<b>Status:</b> Ready. <span class="rlms-kbd">Right-click</span> to flag, <span class="rlms-kbd">Space</span> while hovering to flag, <span class="rlms-kbd">Shift+click</span>/<span class="rlms-kbd">Middle-click</span> or <span class="rlms-kbd">Space</span> on a number to chord. Game by David Parkinson; autosolver by David Hill.', '');
   }
 
-  boardEl.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  function getCellFromEvent(e) {
+    var cell = e.target.closest('.rlms-cell');
+    if (!cell || cell.dataset.x === undefined || cell.dataset.y === undefined) return null;
+    var x = parseInt(cell.dataset.x, 10);
+    var y = parseInt(cell.dataset.y, 10);
+    if (isNaN(x) || isNaN(y)) return null;
+    return { x: x, y: y };
+  }
+
+  boardEl.addEventListener('click', function (e) {
+    var cell = getCellFromEvent(e);
+    if (!cell || gameOver) return;
+    if (e.shiftKey) chord(cell.x, cell.y);
+    else reveal(cell.x, cell.y);
+  });
+
+  boardEl.addEventListener('auxclick', function (e) {
+    if (e.button !== 1) return;
+    var cell = getCellFromEvent(e);
+    if (!cell || gameOver) return;
+    e.preventDefault();
+    chord(cell.x, cell.y);
+  });
+
+  boardEl.addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+    var cell = getCellFromEvent(e);
+    if (!cell || gameOver) return;
+    toggleFlag(cell.x, cell.y);
+  });
 
   window.addEventListener('keydown', function (e) {
     if ((e.key === ' ' || e.key === 'Spacebar' || e.code === 'Space') && hovered && !gameOver) {
