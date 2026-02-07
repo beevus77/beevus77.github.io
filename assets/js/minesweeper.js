@@ -697,17 +697,63 @@
   }
 
   function getCellFromEvent(e) {
-    var cell = e.target.closest('.rlms-cell');
-    if (!cell || cell.dataset.x === undefined || cell.dataset.y === undefined) return null;
-    var x = parseInt(cell.dataset.x, 10);
-    var y = parseInt(cell.dataset.y, 10);
+    return getCellFromElement(e.target.closest('.rlms-cell'));
+  }
+
+  function getCellFromElement(el) {
+    if (!el || el.dataset.x === undefined || el.dataset.y === undefined) return null;
+    var x = parseInt(el.dataset.x, 10);
+    var y = parseInt(el.dataset.y, 10);
     if (isNaN(x) || isNaN(y)) return null;
     return { x: x, y: y };
   }
 
+  var longPressTimer = null;
+  var longPressCell = null;
+  var lastLongPressCell = null;
+  var lastLongPressTime = 0;
+  var LONG_PRESS_MS = 450;
+  var LONG_PRESS_SUPPRESS_MS = 400;
+
+  boardEl.addEventListener('touchstart', function (e) {
+    if (gameOver || e.touches.length !== 1) return;
+    var cell = getCellFromElement(e.target.closest('.rlms-cell'));
+    if (!cell) return;
+    longPressCell = cell;
+    longPressTimer = setTimeout(function () {
+      longPressTimer = null;
+      if (longPressCell) {
+        toggleFlag(longPressCell.x, longPressCell.y);
+        lastLongPressCell = { x: longPressCell.x, y: longPressCell.y };
+        lastLongPressTime = Date.now();
+        longPressCell = null;
+      }
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+
+  boardEl.addEventListener('touchend', function (e) {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    longPressCell = null;
+  }, { passive: true });
+
+  boardEl.addEventListener('touchcancel', function (e) {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    longPressCell = null;
+  }, { passive: true });
+
   boardEl.addEventListener('click', function (e) {
     var cell = getCellFromEvent(e);
     if (!cell || gameOver) return;
+    if (lastLongPressCell && cell.x === lastLongPressCell.x && cell.y === lastLongPressCell.y && (Date.now() - lastLongPressTime) < LONG_PRESS_SUPPRESS_MS) {
+      lastLongPressCell = null;
+      return;
+    }
     if (e.shiftKey) chord(cell.x, cell.y);
     else reveal(cell.x, cell.y);
   });
