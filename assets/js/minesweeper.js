@@ -348,23 +348,27 @@
   function trivialAnalysis() {
     var toReveal = {};
     var toFlag = {};
-    var x, y, cell, num, adjFlags, hidden, i, k;
+    var x, y, cell, num, adjFlags, hidden, need, i, k;
 
     for (y = 0; y < H; y++) {
       for (x = 0; x < W; x++) {
         cell = grid[idxOf(x, y)];
-        if (!cell.revealed || cell.mine || cell.adj === 0) continue;
-        num = cell.adj;
+        if (!cell.revealed || cell.mine) continue;
+        num = Number(cell.adj);
+        if (num < 0 || num > 8) continue;
         adjFlags = countAdjacentFlags(x, y);
         hidden = getAdjacentHidden(x, y);
         if (hidden.length === 0) continue;
+
+        need = num - adjFlags;
+        if (need < 0) continue;
 
         if (adjFlags === num) {
           for (i = 0; i < hidden.length; i++) {
             k = key(hidden[i][0], hidden[i][1]);
             toReveal[k] = hidden[i];
           }
-        } else if (num - adjFlags === hidden.length) {
+        } else if (need === hidden.length) {
           for (i = 0; i < hidden.length; i++) {
             k = key(hidden[i][0], hidden[i][1]);
             toFlag[k] = hidden[i];
@@ -373,10 +377,8 @@
       }
     }
 
-    var revealList = [];
-    for (k in toReveal) revealList.push(toReveal[k]);
-    var flagList = [];
-    for (k in toFlag) flagList.push(toFlag[k]);
+    var revealList = Object.keys(toReveal).map(function (k) { return toReveal[k]; });
+    var flagList = Object.keys(toFlag).map(function (k) { return toFlag[k]; });
 
     if (revealList.length === 0 && flagList.length === 0) return null;
     return { toReveal: revealList, toFlag: flagList };
@@ -401,8 +403,7 @@
         }
       }
     }
-    var list = [];
-    for (var id in set) list.push(set[id]);
+    var list = Object.keys(set).map(function (id) { return set[id]; });
     return list;
   }
 
