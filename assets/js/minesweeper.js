@@ -21,7 +21,12 @@
   var mEl = document.getElementById('minesweeper-m');
   var newBtn = document.getElementById('minesweeper-new-game');
   var autosolveBtn = document.getElementById('minesweeper-autosolve');
+  var autoplayBtn = document.getElementById('minesweeper-autoplay');
   var resetBtn = document.getElementById('minesweeper-reset');
+
+  var autoplayActive = false;
+  var AUTOPLAY_PAUSE_MS = 1200;
+  var AUTOPLAY_START_DELAY_MS = 150;
 
   var W = 9, H = 9, MINES = 10;
   var firstClick = true;
@@ -635,6 +640,24 @@
     if (statusEl && !gameOver && revealedCount < total && statusEl.textContent.indexOf('guess') === -1) {
       setStatus('<b>Status:</b> Solver stuck. Try clicking once and Autosolve again.', '');
     }
+
+    if (autoplayActive && autoplayBtn) {
+      setTimeout(function () {
+        if (!autoplayActive) return;
+        newGame();
+        setTimeout(autoplayRound, AUTOPLAY_START_DELAY_MS);
+      }, AUTOPLAY_PAUSE_MS);
+    }
+  }
+
+  function autoplayRound() {
+    if (!autoplayActive || gameOver) return;
+    if (firstClick) {
+      var cx = Math.floor(W / 2);
+      var cy = Math.floor(H / 2);
+      reveal(cx, cy);
+    }
+    runAutosolve();
   }
 
   function newGame() {
@@ -795,19 +818,42 @@
   });
 
   if (newBtn) newBtn.addEventListener('click', function () {
+    if (autoplayActive) {
+      autoplayActive = false;
+      if (autoplayBtn) autoplayBtn.textContent = 'Autoplay';
+    }
     applyPreset();
     newGame();
   });
 
   if (resetBtn) resetBtn.addEventListener('click', function () {
+    if (autoplayActive) {
+      autoplayActive = false;
+      if (autoplayBtn) autoplayBtn.textContent = 'Autoplay';
+    }
     if (presetEl) presetEl.value = 'beginner';
     applyPreset();
     newGame();
   });
 
-  if (faceEl) faceEl.addEventListener('click', newGame);
+  if (faceEl) faceEl.addEventListener('click', function () {
+    if (autoplayActive) {
+      autoplayActive = false;
+      if (autoplayBtn) autoplayBtn.textContent = 'Autoplay';
+    }
+    newGame();
+  });
 
   if (autosolveBtn) autosolveBtn.addEventListener('click', runAutosolve);
+
+  if (autoplayBtn) autoplayBtn.addEventListener('click', function () {
+    autoplayActive = !autoplayActive;
+    if (autoplayBtn) autoplayBtn.textContent = autoplayActive ? 'Stop Autoplay' : 'Autoplay';
+    if (autoplayActive) {
+      newGame();
+      setTimeout(autoplayRound, AUTOPLAY_START_DELAY_MS);
+    }
+  });
 
   applyPreset();
   newGame();
