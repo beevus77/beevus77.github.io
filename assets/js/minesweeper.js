@@ -851,17 +851,31 @@
 
   if (autosolveBtn) autosolveBtn.addEventListener('click', runAutosolve);
 
-  document.body.addEventListener('click', function (e) {
-    var btn = e.target.id === 'minesweeper-autoplay' ? e.target : (e.target.closest && e.target.closest('#minesweeper-autoplay'));
-    if (!btn) return;
-    e.preventDefault();
+  function handleAutoplayClick() {
     autoplayActive = !autoplayActive;
-    btn.textContent = autoplayActive ? 'Stop Autoplay' : 'Autoplay';
+    var btn = document.getElementById('minesweeper-autoplay');
+    if (btn) btn.textContent = autoplayActive ? 'Stop Autoplay' : 'Autoplay';
     if (autoplayActive) {
       newGame();
       setTimeout(autoplayRound, AUTOPLAY_START_DELAY_MS);
     }
-  });
+  }
+
+  var gameContainer = document.querySelector('.rlms-game');
+  if (gameContainer) {
+    gameContainer.addEventListener('click', function (e) {
+      var el = e.target;
+      while (el && el !== gameContainer) {
+        if (el.getAttribute && el.getAttribute('data-rlms-action') === 'autoplay') {
+          e.preventDefault();
+          e.stopPropagation();
+          handleAutoplayClick();
+          return;
+        }
+        el = el.parentNode;
+      }
+    });
+  }
 
   applyPreset();
   newGame();
