@@ -641,7 +641,7 @@
       setStatus('<b>Status:</b> Solver stuck. Try clicking once and Autosolve again.', '');
     }
 
-    if (autoplayActive && autoplayBtn) {
+    if (autoplayActive) {
       setTimeout(function () {
         if (!autoplayActive) return;
         newGame();
@@ -817,10 +817,15 @@
     if (el) el.addEventListener('input', function () { if (presetEl) presetEl.value = 'custom'; });
   });
 
+  function stopAutoplayUI() {
+    var btn = document.getElementById('minesweeper-autoplay');
+    if (btn) btn.textContent = 'Autoplay';
+  }
+
   if (newBtn) newBtn.addEventListener('click', function () {
     if (autoplayActive) {
       autoplayActive = false;
-      if (autoplayBtn) autoplayBtn.textContent = 'Autoplay';
+      stopAutoplayUI();
     }
     applyPreset();
     newGame();
@@ -829,7 +834,7 @@
   if (resetBtn) resetBtn.addEventListener('click', function () {
     if (autoplayActive) {
       autoplayActive = false;
-      if (autoplayBtn) autoplayBtn.textContent = 'Autoplay';
+      stopAutoplayUI();
     }
     if (presetEl) presetEl.value = 'beginner';
     applyPreset();
@@ -839,16 +844,19 @@
   if (faceEl) faceEl.addEventListener('click', function () {
     if (autoplayActive) {
       autoplayActive = false;
-      if (autoplayBtn) autoplayBtn.textContent = 'Autoplay';
+      stopAutoplayUI();
     }
     newGame();
   });
 
   if (autosolveBtn) autosolveBtn.addEventListener('click', runAutosolve);
 
-  if (autoplayBtn) autoplayBtn.addEventListener('click', function () {
+  document.body.addEventListener('click', function (e) {
+    var btn = e.target.id === 'minesweeper-autoplay' ? e.target : (e.target.closest && e.target.closest('#minesweeper-autoplay'));
+    if (!btn) return;
+    e.preventDefault();
     autoplayActive = !autoplayActive;
-    if (autoplayBtn) autoplayBtn.textContent = autoplayActive ? 'Stop Autoplay' : 'Autoplay';
+    btn.textContent = autoplayActive ? 'Stop Autoplay' : 'Autoplay';
     if (autoplayActive) {
       newGame();
       setTimeout(autoplayRound, AUTOPLAY_START_DELAY_MS);
