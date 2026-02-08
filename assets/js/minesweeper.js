@@ -392,8 +392,9 @@
     return { toReveal: revealList, toFlag: flagList };
   }
 
-  var MAX_FRONTIER_FOR_PROB = 22;
-  var PROBABILITY_ENGINE_TIMEOUT_MS = 3000;
+  var MAX_FRONTIER_FOR_PROB = 28;
+  var PROBABILITY_ENGINE_TIMEOUT_MS = 8000;
+  var BRUTE_FORCE_MAX_SOLUTIONS = 750;
 
   function getFrontier() {
     var set = {};
@@ -499,15 +500,29 @@
     return pairs;
   }
 
-  function guessingLogic(probs, frontier, frontierSet) {
+  function countHiddenNeighbors(x, y) {
+    var n = 0;
+    for (var d = 0; d < dirs.length; d++) {
+      var nx = x + dirs[d][0], ny = y + dirs[d][1];
+      if (inBounds(nx, ny)) {
+        var c = grid[idxOf(nx, ny)];
+        if (!c.revealed && !c.flagged) n++;
+      }
+    }
+    return n;
+  }
+
+  function guessingLogic(probs, frontier, frontierSet, totalSolutions) {
     var safest = 1;
-    var i, k, p, x, y, nx, ny, adjKey, maxAdjP, score;
+    var i, k, p, x, y, nx, ny, adjKey, maxAdjP, score, progressBonus;
     for (i = 0; i < frontier.length; i++) {
       k = key(frontier[i][0], frontier[i][1]);
       p = probs[k];
       if (p < safest) safest = p;
     }
-    var cutoff = Math.min(1, safest + 0.1);
+    var cutoff = (totalSolutions > 0 && totalSolutions <= BRUTE_FORCE_MAX_SOLUTIONS)
+      ? Math.min(1, safest + 0.01)
+      : Math.min(1, safest + 0.15);
     var candidates = [];
     for (i = 0; i < frontier.length; i++) {
       x = frontier[i][0];
@@ -524,7 +539,8 @@
           if (probs[adjKey] !== undefined && probs[adjKey] > maxAdjP) maxAdjP = probs[adjKey];
         }
       }
-      score = (1 - p) + 0.2 * (1 - maxAdjP);
+      progressBonus = countHiddenNeighbors(x, y) / 8;
+      score = (1 - p) + 0.2 * (1 - maxAdjP) + 0.08 * progressBonus;
       candidates.push({ x: x, y: y, p: p, score: score });
     }
     if (candidates.length === 0) return null;
@@ -558,6 +574,7 @@
 
     var result = probabilityEngine(frontier, constraints, remainingMines, otherHiddenCount);
     var probs = result.probs;
+    var totalSolutions = result.totalSolutions;
 
     var safeReveal = [];
     var toFlag = [];
@@ -573,14 +590,23 @@
 
     var fifty50 = find5050(frontier, constraints);
     if (fifty50.length > 0) {
-      var pick = fifty50[0][0];
+      var pair = fifty50[0];
+      var pick = pair[0];
+      if (totalSolutions > 0 && totalSolutions <= BRUTE_FORCE_MAX_SOLUTIONS) {
+        var p0 = probs[key(pair[0][0], pair[0][1])];
+        var p1 = probs[key(pair[1][0], pair[1][1])];
+        pick = (p0 <= p1) ? pair[0] : pair[1];
+      }
       if (acceptGuesses) return { toReveal: [], toFlag: [], guess: pick, method: '50/50' };
       return { toReveal: [], toFlag: [], guess: pick, method: '50/50' };
     }
 
-    var bestGuess = guessingLogic(probs, frontier, frontierSet);
+    var bestGuess = guessingLogic(probs, frontier, frontierSet, totalSolutions);
     if (bestGuess && acceptGuesses) {
-      return { toReveal: [], toFlag: [], guess: bestGuess, method: 'guessing' };
+      var method = (totalSolutions > 0 && totalSolutions <= BRUTE_FORCE_MAX_SOLUTIONS)
+        ? 'brute-force'
+        : 'guessing';
+      return { toReveal: [], toFlag: [], guess: bestGuess, method: method };
     }
     if (bestGuess) return { toReveal: [], toFlag: [], guess: bestGuess, method: 'guessing' };
     return null;
@@ -664,8 +690,17 @@
   function autoplayRound() {
     if (!autoplayActive || gameOver) return;
     if (firstClick) {
-      var cx = Math.floor(W / 2);
-      var cy = Math.floor(H / 2);
+      var cx, cy;
+      if (W === 30 && H === 16 && MINES === 99) {
+        cx = 3;
+        cy = 3;
+      } else if (W >= 20 && MINES >= 40) {
+        cx = Math.min(3, Math.floor(W / 2));
+        cy = Math.min(3, Math.floor(H / 2));
+      } else {
+        cx = Math.floor(W / 2);
+        cy = Math.floor(H / 2);
+      }
       reveal(cx, cy);
     }
     runAutosolve();
