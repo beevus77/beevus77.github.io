@@ -394,8 +394,9 @@
   }
 
   var MAX_FRONTIER_FOR_PROB = 28;
-  var PROBABILITY_ENGINE_TIMEOUT_MS = 8000;
+  var PROBABILITY_ENGINE_TIMEOUT_MS = 4000;
   var BRUTE_FORCE_MAX_SOLUTIONS = 750;
+  var MAX_COMPONENT_SIZE_FOR_SPLIT = 12;
 
   function getFrontier() {
     var set = {};
@@ -542,7 +543,16 @@
     var startTime = Date.now();
 
     var components = getConstraintComponents(F, constraints);
-    if (components.length > 1) {
+    var useComponentSplit = components.length > 1;
+    if (useComponentSplit) {
+      for (var ccCheck = 0; ccCheck < components.length; ccCheck++) {
+        if (components[ccCheck].length > MAX_COMPONENT_SIZE_FOR_SPLIT) {
+          useComponentSplit = false;
+          break;
+        }
+      }
+    }
+    if (useComponentSplit) {
       var compResults = [];
       var cc, comp, oldToNew, subFrontier, subConstraints, k, res, solutionsByK, mineCountsByK, c, j, i, K, k1;
       for (cc = 0; cc < components.length; cc++) {
@@ -983,11 +993,11 @@
       }
       steps++;
       applyMoveWithDelay(move, function () {
-        doStep();
+        setTimeout(doStep, 0);
       });
     }
 
-    doStep();
+    setTimeout(doStep, 0);
   }
 
   function autoplayRound() {
