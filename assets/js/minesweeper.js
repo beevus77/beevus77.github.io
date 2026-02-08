@@ -27,6 +27,7 @@
   var autoplayActive = false;
   var autoplayPauseMs = 1200;
   var AUTOPLAY_START_DELAY_MS = 150;
+  var SOLVER_ANIMATION_DELAY_MS = 80;
   var autoplayWins = 0;
   var autoplayGames = 0;
   var autoplayResults = [];
@@ -907,65 +908,86 @@
     var maxSteps = 500;
     var steps = 0;
     var move, i, xy;
+    var delayMs = SOLVER_ANIMATION_DELAY_MS;
 
-    while (!gameOver && revealedCount < total && steps < maxSteps) {
-      steps++;
-      move = fullSolver(acceptGuesses);
-      if (!move) break;
-
-      for (i = 0; i < move.toFlag.length; i++) {
-        xy = move.toFlag[i];
-        if (!grid[idxOf(xy[0], xy[1])].flagged) {
-          toggleFlag(xy[0], xy[1]);
-        }
-      }
-      for (i = 0; i < move.toReveal.length; i++) {
-        xy = move.toReveal[i];
-        if (!grid[idxOf(xy[0], xy[1])].revealed && !grid[idxOf(xy[0], xy[1])].flagged) {
-          reveal(xy[0], xy[1]);
-          if (gameOver) break;
-        }
-      }
-      if (gameOver) break;
-      if (move.guess && acceptGuesses) {
-        xy = move.guess;
-        if (!grid[idxOf(xy[0], xy[1])].revealed && !grid[idxOf(xy[0], xy[1])].flagged) {
-          reveal(xy[0], xy[1]);
-        }
-      } else if (move.guess && !acceptGuesses) {
-        setStatus('<b>Status:</b> No safe move (guess required).', '');
-        break;
-      } else if (move.toReveal.length === 0 && move.toFlag.length === 0 && !move.guess) {
-        break;
-      }
-    }
-
-    if (!gameOver && revealedCount < total) {
-      if (statusEl && statusEl.textContent.indexOf('guess') === -1) {
+    function finish() {
+      isAutosolving = false;
+      if (!gameOver && revealedCount < total && statusEl && statusEl.textContent.indexOf('guess') === -1) {
         setStatus('<b>Status:</b> Solver stuck. Try clicking once and Autosolve again.', '');
       }
+      if (autoplayActive) {
+        var totalSafe = W * H - MINES;
+        var won = (revealedCount >= totalSafe);
+        autoplayGames++;
+        if (won) autoplayWins++;
+        autoplayResults.push(won);
+        var capEl = document.getElementById('minesweeper-chart-caption');
+        if (capEl) capEl.textContent = 'Games: ' + autoplayGames + ' — Win ratio: ' + ((autoplayWins / autoplayGames) * 100).toFixed(1) + '%';
+        drawWinRatioChart();
+        setTimeout(function () {
+          if (!autoplayActive) return;
+          newGame();
+          setTimeout(autoplayRound, AUTOPLAY_START_DELAY_MS);
+        }, autoplayPauseMs);
+      }
     }
 
-    isAutosolving = false;
-    if (statusEl && !gameOver && revealedCount < total && statusEl.textContent.indexOf('guess') === -1) {
-      setStatus('<b>Status:</b> Solver stuck. Try clicking once and Autosolve again.', '');
+    function applyOne(item) {
+      if (item.type === 'flag') {
+        if (!grid[idxOf(item.xy[0], item.xy[1])].flagged) toggleFlag(item.xy[0], item.xy[1]);
+      } else {
+        if (!grid[idxOf(item.xy[0], item.xy[1])].revealed && !grid[idxOf(item.xy[0], item.xy[1])].flagged) {
+          reveal(item.xy[0], item.xy[1]);
+        }
+      }
     }
 
-    if (autoplayActive) {
-      var totalSafe = W * H - MINES;
-      var won = (revealedCount >= totalSafe);
-      autoplayGames++;
-      if (won) autoplayWins++;
-      autoplayResults.push(won);
-      var capEl = document.getElementById('minesweeper-chart-caption');
-      if (capEl) capEl.textContent = 'Games: ' + autoplayGames + ' — Win ratio: ' + ((autoplayWins / autoplayGames) * 100).toFixed(1) + '%';
-      drawWinRatioChart();
-      setTimeout(function () {
-        if (!autoplayActive) return;
-        newGame();
-        setTimeout(autoplayRound, AUTOPLAY_START_DELAY_MS);
-      }, autoplayPauseMs);
+    function applyMoveWithDelay(move, onDone) {
+      var list = [];
+      for (i = 0; i < move.toFlag.length; i++) list.push({ type: 'flag', xy: move.toFlag[i] });
+      for (i = 0; i < move.toReveal.length; i++) list.push({ type: 'reveal', xy: move.toReveal[i] });
+      if (move.guess && acceptGuesses) list.push({ type: 'reveal', xy: move.guess });
+      if (list.length === 0) {
+        if (move.guess && !acceptGuesses) setStatus('<b>Status:</b> No safe move (guess required).', '');
+        onDone();
+        return;
+      }
+      if (delayMs <= 0) {
+        for (i = 0; i < list.length && !gameOver; i++) applyOne(list[i]);
+        onDone();
+        return;
+      }
+      var idx = 0;
+      function next() {
+        if (gameOver || idx >= list.length) { onDone(); return; }
+        applyOne(list[idx++]);
+        if (gameOver || idx >= list.length) { onDone(); return; }
+        setTimeout(next, delayMs);
+      }
+      next();
     }
+
+    function doStep() {
+      if (gameOver || revealedCount >= total || steps >= maxSteps) {
+        finish();
+        return;
+      }
+      move = fullSolver(acceptGuesses);
+      if (!move) {
+        finish();
+        return;
+      }
+      if (move.toReveal.length === 0 && move.toFlag.length === 0 && !move.guess) {
+        finish();
+        return;
+      }
+      steps++;
+      applyMoveWithDelay(move, function () {
+        doStep();
+      });
+    }
+
+    doStep();
   }
 
   function autoplayRound() {
