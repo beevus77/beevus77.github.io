@@ -438,22 +438,59 @@
     return constraints;
   }
 
-  function probabilityEngine(frontier, constraints, remainingMines, otherHiddenCount) {
-    var F = frontier.length;
-    var O = otherHiddenCount;
-    var M = remainingMines;
-    var minK = Math.max(0, M - O);
-    var maxK = Math.min(F, M);
+  function getConstraintComponents(F, constraints) {
+    var parent = [];
+    var i, c, j, a, b;
+    for (i = 0; i < F; i++) parent[i] = i;
+    function find(x) {
+      if (parent[x] !== x) parent[x] = find(parent[x]);
+      return parent[x];
+    }
+    function union(a, b) {
+      a = find(a);
+      b = find(b);
+      if (a !== b) parent[a] = b;
+    }
+    for (c = 0; c < constraints.length; c++) {
+      var inds = constraints[c].indices;
+      for (j = 1; j < inds.length; j++) union(inds[0], inds[j]);
+    }
+    var compIds = {};
+    var compList = [];
+    for (i = 0; i < F; i++) {
+      var root = find(i);
+      if (compIds[root] === undefined) {
+        compIds[root] = compList.length;
+        compList.push([]);
+      }
+      compList[compIds[root]].push(i);
+    }
+    return compList;
+  }
 
+  function probabilityEngineSingleComponent(frontier, constraints, targetK, startTime) {
+    var F = frontier.length;
     var mineCounts = [];
-    var i;
+    var i, c, j;
     for (i = 0; i < F; i++) mineCounts[i] = 0;
     var totalSolutions = 0;
     var assignment = [];
-    var startTime = Date.now();
-
+    var constraintsByIdx = [];
+    for (i = 0; i < F; i++) constraintsByIdx[i] = [];
+    for (c = 0; c < constraints.length; c++) {
+      for (j = 0; j < constraints[c].indices.length; j++) {
+        constraintsByIdx[constraints[c].indices[j]].push(c);
+      }
+    }
+    function remainingInConstraint(ci, fromIdx) {
+      var r = 0;
+      for (j = 0; j < constraints[ci].indices.length; j++) {
+        if (constraints[ci].indices[j] >= fromIdx) r++;
+      }
+      return r;
+    }
     function checkConstraints() {
-      var c, sum, j;
+      var sum;
       for (c = 0; c < constraints.length; c++) {
         sum = 0;
         for (j = 0; j < constraints[c].indices.length; j++) sum += assignment[constraints[c].indices[j]];
@@ -461,6 +498,178 @@
       }
       return true;
     }
+    var partialSum = [];
+    for (c = 0; c < constraints.length; c++) partialSum[c] = 0;
+    function recurse(idx, placed) {
+      if (startTime && Date.now() - startTime > PROBABILITY_ENGINE_TIMEOUT_MS) return;
+      if (idx === F) {
+        if (placed !== targetK || !checkConstraints()) return;
+        totalSolutions++;
+        for (i = 0; i < F; i++) mineCounts[i] += assignment[i];
+        return;
+      }
+      var canZero = true, canOne = true;
+      for (j = 0; j < constraintsByIdx[idx].length; j++) {
+        c = constraintsByIdx[idx][j];
+        var need = constraints[c].need, r = remainingInConstraint(c, idx);
+        if (need - r + 1 > partialSum[c] || partialSum[c] > need) canZero = false;
+        if (need - r > partialSum[c] || partialSum[c] > need - 1) canOne = false;
+      }
+      if (canZero) {
+        assignment[idx] = 0;
+        for (j = 0; j < constraintsByIdx[idx].length; j++) partialSum[constraintsByIdx[idx][j]] += 0;
+        recurse(idx + 1, placed);
+        for (j = 0; j < constraintsByIdx[idx].length; j++) partialSum[constraintsByIdx[idx][j]] -= 0;
+      }
+      if (canOne) {
+        assignment[idx] = 1;
+        for (j = 0; j < constraintsByIdx[idx].length; j++) partialSum[constraintsByIdx[idx][j]] += 1;
+        recurse(idx + 1, placed + 1);
+        for (j = 0; j < constraintsByIdx[idx].length; j++) partialSum[constraintsByIdx[idx][j]] -= 1;
+      }
+    }
+    recurse(0, 0);
+    return { solutions: totalSolutions, mineCounts: mineCounts };
+  }
+
+  function probabilityEngine(frontier, constraints, remainingMines, otherHiddenCount) {
+    var F = frontier.length;
+    var O = otherHiddenCount;
+    var M = remainingMines;
+    var minK = Math.max(0, M - O);
+    var maxK = Math.min(F, M);
+    var startTime = Date.now();
+
+    var components = getConstraintComponents(F, constraints);
+    if (components.length > 1) {
+      var compResults = [];
+      var cc, comp, oldToNew, subFrontier, subConstraints, k, res, solutionsByK, mineCountsByK, c, j, i, K, k1;
+      for (cc = 0; cc < components.length; cc++) {
+        comp = components[cc];
+        oldToNew = {};
+        subFrontier = [];
+        for (var ci = 0; ci < comp.length; ci++) {
+          oldToNew[comp[ci]] = ci;
+          subFrontier.push(frontier[comp[ci]]);
+        }
+        subConstraints = [];
+        for (c = 0; c < constraints.length; c++) {
+          var allIn = true;
+          for (j = 0; j < constraints[c].indices.length; j++) {
+            if (oldToNew[constraints[c].indices[j]] === undefined) { allIn = false; break; }
+          }
+          if (allIn && constraints[c].indices.length > 0) {
+            var remap = [];
+            for (j = 0; j < constraints[c].indices.length; j++) remap.push(oldToNew[constraints[c].indices[j]]);
+            subConstraints.push({ indices: remap, need: constraints[c].need });
+          }
+        }
+        solutionsByK = [];
+        mineCountsByK = [];
+        for (k = 0; k <= comp.length; k++) {
+          res = probabilityEngineSingleComponent(subFrontier, subConstraints, k, startTime);
+          solutionsByK[k] = res.solutions;
+          mineCountsByK[k] = res.mineCounts;
+        }
+        compResults.push({ comp: comp, solutionsByK: solutionsByK, mineCountsByK: mineCountsByK, size: comp.length });
+      }
+      var totalSolutions = 0;
+      var mineCounts = [];
+      for (i = 0; i < F; i++) mineCounts[i] = 0;
+      function convolveTwo(r1, r2) {
+        var F1 = r1.size, F2 = r2.size;
+        var S1 = r1.solutionsByK, S2 = r2.solutionsByK;
+        var MC1 = r1.mineCountsByK, MC2 = r2.mineCountsByK;
+        var total = 0;
+        var newMC1 = [], newMC2 = [];
+        for (i = 0; i < F1; i++) newMC1[i] = 0;
+        for (i = 0; i < F2; i++) newMC2[i] = 0;
+        for (var K = minK; K <= maxK; K++) {
+          for (var k1 = Math.max(0, K - F2); k1 <= Math.min(F1, K); k1++) {
+            var k2 = K - k1;
+            var prod = S1[k1] * S2[k2];
+            total += prod;
+            for (i = 0; i < F1; i++) newMC1[i] += MC1[k1][i] * S2[k2];
+            for (i = 0; i < F2; i++) newMC2[i] += MC2[k2][i] * S1[k1];
+          }
+        }
+        return { total: total, mc1: newMC1, mc2: newMC2 };
+      }
+      var combined = compResults[0];
+      for (var rr = 1; rr < compResults.length; rr++) {
+        var left = combined;
+        var right = compResults[rr];
+        var leftSize = left.size;
+        var rightSize = right.size;
+        var newSByK = [];
+        var newMCByK = [];
+        for (K = 0; K <= leftSize + rightSize; K++) {
+          newSByK[K] = 0;
+          newMCByK[K] = [];
+          for (i = 0; i < leftSize + rightSize; i++) newMCByK[K][i] = 0;
+          for (k1 = Math.max(0, K - rightSize); k1 <= Math.min(leftSize, K); k1++) {
+            var k2 = K - k1;
+            newSByK[K] += left.solutionsByK[k1] * right.solutionsByK[k2];
+            for (i = 0; i < leftSize; i++) newMCByK[K][i] += left.mineCountsByK[k1][i] * right.solutionsByK[k2];
+            for (i = 0; i < rightSize; i++) newMCByK[K][leftSize + i] += right.mineCountsByK[k2][i] * left.solutionsByK[k1];
+          }
+        }
+        combined = {
+          comp: left.comp.concat(right.comp),
+          solutionsByK: newSByK,
+          mineCountsByK: newMCByK,
+          size: leftSize + rightSize
+        };
+      }
+      totalSolutions = 0;
+      for (i = 0; i < F; i++) mineCounts[i] = 0;
+      for (K = minK; K <= maxK; K++) {
+        totalSolutions += combined.solutionsByK[K] || 0;
+        if (combined.mineCountsByK[K]) {
+          for (i = 0; i < F; i++) mineCounts[combined.comp[i]] += combined.mineCountsByK[K][i] || 0;
+        }
+      }
+      var probs = {};
+      for (i = 0; i < F; i++) {
+        probs[key(frontier[i][0], frontier[i][1])] = totalSolutions === 0 ? 0.5 : mineCounts[i] / totalSolutions;
+      }
+      return { probs: probs, totalSolutions: totalSolutions, mineCounts: mineCounts };
+    }
+
+    var mineCounts = [];
+    for (i = 0; i < F; i++) mineCounts[i] = 0;
+    var totalSolutions = 0;
+    var assignment = [];
+    var i, c, j;
+
+    var constraintsByIdx = [];
+    for (i = 0; i < F; i++) constraintsByIdx[i] = [];
+    for (c = 0; c < constraints.length; c++) {
+      for (j = 0; j < constraints[c].indices.length; j++) {
+        var idx = constraints[c].indices[j];
+        constraintsByIdx[idx].push(c);
+      }
+    }
+    function remainingInConstraint(constraintIdx, fromIdx) {
+      var r = 0;
+      for (j = 0; j < constraints[constraintIdx].indices.length; j++) {
+        if (constraints[constraintIdx].indices[j] >= fromIdx) r++;
+      }
+      return r;
+    }
+
+    function checkConstraints() {
+      var sum;
+      for (c = 0; c < constraints.length; c++) {
+        sum = 0;
+        for (j = 0; j < constraints[c].indices.length; j++) sum += assignment[constraints[c].indices[j]];
+        if (sum !== constraints[c].need) return false;
+      }
+      return true;
+    }
+
+    var partialSum = [];
+    for (c = 0; c < constraints.length; c++) partialSum[c] = 0;
 
     function recurse(idx, placed) {
       if (Date.now() - startTime > PROBABILITY_ENGINE_TIMEOUT_MS) return;
@@ -471,10 +680,43 @@
         for (i = 0; i < F; i++) mineCounts[i] += assignment[i];
         return;
       }
-      assignment[idx] = 0;
-      recurse(idx + 1, placed);
-      assignment[idx] = 1;
-      recurse(idx + 1, placed + 1);
+      var canZero = true;
+      var canOne = true;
+      for (j = 0; j < constraintsByIdx[idx].length; j++) {
+        c = constraintsByIdx[idx][j];
+        var need = constraints[c].need;
+        var r = remainingInConstraint(c, idx);
+        if (need - r + 1 > partialSum[c] || partialSum[c] > need) canZero = false;
+        if (need - r > partialSum[c] || partialSum[c] > need - 1) canOne = false;
+      }
+      var remainingCells = F - idx - 1;
+      if (placed > maxK || placed + remainingCells < minK) canZero = false;
+      if (placed + 1 > maxK || placed + 1 + remainingCells < minK) canOne = false;
+
+      if (canZero) {
+        assignment[idx] = 0;
+        for (j = 0; j < constraintsByIdx[idx].length; j++) {
+          c = constraintsByIdx[idx][j];
+          partialSum[c] += 0;
+        }
+        recurse(idx + 1, placed);
+        for (j = 0; j < constraintsByIdx[idx].length; j++) {
+          c = constraintsByIdx[idx][j];
+          partialSum[c] -= 0;
+        }
+      }
+      if (canOne) {
+        assignment[idx] = 1;
+        for (j = 0; j < constraintsByIdx[idx].length; j++) {
+          c = constraintsByIdx[idx][j];
+          partialSum[c] += 1;
+        }
+        recurse(idx + 1, placed + 1);
+        for (j = 0; j < constraintsByIdx[idx].length; j++) {
+          c = constraintsByIdx[idx][j];
+          partialSum[c] -= 1;
+        }
+      }
     }
 
     recurse(0, 0);
@@ -487,9 +729,10 @@
     return { probs: probs, totalSolutions: totalSolutions, mineCounts: mineCounts };
   }
 
-  function find5050(frontier, constraints) {
+  function find5050(frontier, constraints, frontierSet) {
     var pairs = [];
-    var c, inds, need;
+    var quads = [];
+    var c, inds, need, i, j, k, keys4, sumNeed, cx, cy, constraintTouchesOnly;
     for (c = 0; c < constraints.length; c++) {
       inds = constraints[c].indices;
       need = constraints[c].need;
@@ -497,7 +740,29 @@
         pairs.push([frontier[inds[0]], frontier[inds[1]]]);
       }
     }
-    return pairs;
+    for (cy = 0; cy < H - 1; cy++) {
+      for (cx = 0; cx < W - 1; cx++) {
+        keys4 = [
+          key(cx, cy), key(cx + 1, cy), key(cx, cy + 1), key(cx + 1, cy + 1)
+        ];
+        if (frontierSet[keys4[0]] === undefined || frontierSet[keys4[1]] === undefined ||
+            frontierSet[keys4[2]] === undefined || frontierSet[keys4[3]] === undefined) continue;
+        var idx4 = [frontierSet[keys4[0]], frontierSet[keys4[1]], frontierSet[keys4[2]], frontierSet[keys4[3]]];
+        sumNeed = 0;
+        for (c = 0; c < constraints.length; c++) {
+          inds = constraints[c].indices;
+          constraintTouchesOnly = true;
+          for (k = 0; k < inds.length; k++) {
+            if (idx4.indexOf(inds[k]) === -1) { constraintTouchesOnly = false; break; }
+          }
+          if (constraintTouchesOnly && inds.length > 0) sumNeed += constraints[c].need;
+        }
+        if (sumNeed === 2) {
+          quads.push([frontier[idx4[0]], frontier[idx4[1]], frontier[idx4[2]], frontier[idx4[3]]]);
+        }
+      }
+    }
+    return { pairs: pairs, quads: quads };
   }
 
   function countHiddenNeighbors(x, y) {
@@ -588,17 +853,33 @@
       return { toReveal: safeReveal, toFlag: toFlag, guess: null, method: 'probability' };
     }
 
-    var fifty50 = find5050(frontier, constraints);
-    if (fifty50.length > 0) {
-      var pair = fifty50[0];
-      var pick = pair[0];
+    var fifty50 = find5050(frontier, constraints, frontierSet);
+    var pick = null;
+    var pickMethod = null;
+    if (fifty50.quads.length > 0) {
+      var quad = fifty50.quads[0];
+      pick = quad[0];
+      if (totalSolutions > 0 && totalSolutions <= BRUTE_FORCE_MAX_SOLUTIONS) {
+        var bestP = 1;
+        for (var qi = 0; qi < quad.length; qi++) {
+          var qp = probs[key(quad[qi][0], quad[qi][1])];
+          if (qp < bestP) { bestP = qp; pick = quad[qi]; }
+        }
+      }
+      pickMethod = '2x2';
+    } else if (fifty50.pairs.length > 0) {
+      var pair = fifty50.pairs[0];
+      pick = pair[0];
       if (totalSolutions > 0 && totalSolutions <= BRUTE_FORCE_MAX_SOLUTIONS) {
         var p0 = probs[key(pair[0][0], pair[0][1])];
         var p1 = probs[key(pair[1][0], pair[1][1])];
         pick = (p0 <= p1) ? pair[0] : pair[1];
       }
-      if (acceptGuesses) return { toReveal: [], toFlag: [], guess: pick, method: '50/50' };
-      return { toReveal: [], toFlag: [], guess: pick, method: '50/50' };
+      pickMethod = '50/50';
+    }
+    if (pick) {
+      if (acceptGuesses) return { toReveal: [], toFlag: [], guess: pick, method: pickMethod };
+      return { toReveal: [], toFlag: [], guess: pick, method: pickMethod };
     }
 
     var bestGuess = guessingLogic(probs, frontier, frontierSet, totalSolutions);
