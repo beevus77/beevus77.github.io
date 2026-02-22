@@ -423,6 +423,11 @@ body.rlms-standalone.rlms-game {
   border-color: var(--rlms-accent);
 }
 
+.rlms-instant-btn.rlms-instant-btn--on {
+  background: rgba(106, 168, 255, .25);
+  border-color: var(--rlms-accent);
+}
+
 .rlms-pause-value {
   font-size: 13px;
   font-weight: 600;

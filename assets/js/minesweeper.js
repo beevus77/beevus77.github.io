@@ -28,6 +28,7 @@
   var autoplayPauseMs = 1200;
   var AUTOPLAY_START_DELAY_MS = 150;
   var SOLVER_ANIMATION_DELAY_MS = 80;
+  var instantAutosolve = false;
   var autoplayWins = 0;
   var autoplayGames = 0;
   var autoplayResults = [];
@@ -393,8 +394,8 @@
     return { toReveal: revealList, toFlag: flagList };
   }
 
-  var MAX_FRONTIER_FOR_PROB = 28;
-  var PROBABILITY_ENGINE_TIMEOUT_MS = 4000;
+  var MAX_FRONTIER_FOR_PROB = 22;
+  var PROBABILITY_ENGINE_TIMEOUT_MS = 1500;
   var BRUTE_FORCE_MAX_SOLUTIONS = 750;
   var MAX_COMPONENT_SIZE_FOR_SPLIT = 12;
 
@@ -470,7 +471,7 @@
     return compList;
   }
 
-  function probabilityEngineSingleComponent(frontier, constraints, targetK, startTime) {
+  function probabilityEngineSingleComponent(frontier, constraints, targetK, startTime, abort) {
     var F = frontier.length;
     var mineCounts = [];
     var i, c, j;
@@ -503,7 +504,11 @@
     var partialSum = [];
     for (c = 0; c < constraints.length; c++) partialSum[c] = 0;
     function recurse(idx, placed) {
-      if (startTime && Date.now() - startTime > PROBABILITY_ENGINE_TIMEOUT_MS) return;
+      if (abort && abort.timedOut) return;
+      if (startTime && Date.now() - startTime > PROBABILITY_ENGINE_TIMEOUT_MS) {
+        abort.timedOut = true;
+        return;
+      }
       if (idx === F) {
         if (placed !== targetK || !checkConstraints()) return;
         totalSolutions++;
@@ -531,7 +536,7 @@
       }
     }
     recurse(0, 0);
-    return { solutions: totalSolutions, mineCounts: mineCounts };
+    return { solutions: totalSolutions, mineCounts: mineCounts, timedOut: abort ? abort.timedOut : false };
   }
 
   function probabilityEngine(frontier, constraints, remainingMines, otherHiddenCount) {
@@ -541,6 +546,7 @@
     var minK = Math.max(0, M - O);
     var maxK = Math.min(F, M);
     var startTime = Date.now();
+    var abort = { timedOut: false };
 
     var components = getConstraintComponents(F, constraints);
     var useComponentSplit = components.length > 1;
@@ -578,9 +584,10 @@
         solutionsByK = [];
         mineCountsByK = [];
         for (k = 0; k <= comp.length; k++) {
-          res = probabilityEngineSingleComponent(subFrontier, subConstraints, k, startTime);
+          res = probabilityEngineSingleComponent(subFrontier, subConstraints, k, startTime, abort);
           solutionsByK[k] = res.solutions;
           mineCountsByK[k] = res.mineCounts;
+          if (res.timedOut) abort.timedOut = true;
         }
         compResults.push({ comp: comp, solutionsByK: solutionsByK, mineCountsByK: mineCountsByK, size: comp.length });
       }
@@ -644,7 +651,7 @@
       for (i = 0; i < F; i++) {
         probs[key(frontier[i][0], frontier[i][1])] = totalSolutions === 0 ? 0.5 : mineCounts[i] / totalSolutions;
       }
-      return { probs: probs, totalSolutions: totalSolutions, mineCounts: mineCounts };
+      return { probs: probs, totalSolutions: totalSolutions, mineCounts: mineCounts, timedOut: abort.timedOut };
     }
 
     var mineCounts = [];
@@ -683,7 +690,11 @@
     for (c = 0; c < constraints.length; c++) partialSum[c] = 0;
 
     function recurse(idx, placed) {
-      if (Date.now() - startTime > PROBABILITY_ENGINE_TIMEOUT_MS) return;
+      if (abort.timedOut) return;
+      if (Date.now() - startTime > PROBABILITY_ENGINE_TIMEOUT_MS) {
+        abort.timedOut = true;
+        return;
+      }
       if (idx === F) {
         if (placed < minK || placed > maxK) return;
         if (!checkConstraints()) return;
@@ -737,7 +748,7 @@
       var k = key(frontier[i][0], frontier[i][1]);
       probs[k] = totalSolutions === 0 ? 0.5 : mineCounts[i] / totalSolutions;
     }
-    return { probs: probs, totalSolutions: totalSolutions, mineCounts: mineCounts };
+    return { probs: probs, totalSolutions: totalSolutions, mineCounts: mineCounts, timedOut: abort.timedOut };
   }
 
   function find5050(frontier, constraints, frontierSet) {
@@ -854,13 +865,15 @@
 
     var safeReveal = [];
     var toFlag = [];
-    for (i = 0; i < frontier.length; i++) {
-      var keyStr = key(frontier[i][0], frontier[i][1]);
-      var prob = probs[keyStr];
-      if (prob <= 0) safeReveal.push(frontier[i]);
-      if (prob >= 1) toFlag.push(frontier[i]);
+    if (!result.timedOut) {
+      for (i = 0; i < frontier.length; i++) {
+        var keyStr = key(frontier[i][0], frontier[i][1]);
+        var prob = probs[keyStr];
+        if (prob <= 0) safeReveal.push(frontier[i]);
+        if (prob >= 1) toFlag.push(frontier[i]);
+      }
     }
-    if (safeReveal.length > 0 || toFlag.length > 0) {
+    if (!result.timedOut && (safeReveal.length > 0 || toFlag.length > 0)) {
       return { toReveal: safeReveal, toFlag: toFlag, guess: null, method: 'probability' };
     }
 
@@ -923,7 +936,7 @@
     var maxSteps = 500;
     var steps = 0;
     var move, i, xy;
-    var delayMs = SOLVER_ANIMATION_DELAY_MS;
+    var delayMs = instantAutosolve ? 0 : SOLVER_ANIMATION_DELAY_MS;
 
     function finish() {
       isAutosolving = false;
@@ -1351,6 +1364,17 @@
           updatePauseDisplay();
           return;
         }
+        if (action === 'instant-solve') {
+          e.preventDefault();
+          e.stopPropagation();
+          instantAutosolve = !instantAutosolve;
+          var instantBtn = document.getElementById('minesweeper-instant-solve');
+          if (instantBtn) {
+            instantBtn.classList.toggle('rlms-instant-btn--on', instantAutosolve);
+            instantBtn.setAttribute('aria-pressed', instantAutosolve);
+          }
+          return;
+        }
         el = el.parentNode;
       }
     });
@@ -1358,6 +1382,9 @@
 
   updatePauseDisplay();
   drawWinRatioChart();
+
+  var instantBtn = document.getElementById('minesweeper-instant-solve');
+  if (instantBtn) instantBtn.setAttribute('aria-pressed', instantAutosolve);
 
   applyPreset();
   newGame();

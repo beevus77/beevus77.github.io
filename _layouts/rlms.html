@@ -95,6 +95,7 @@ layout: null
               <button type="button" class="rlms-pause-btn" id="minesweeper-pause-minus" data-rlms-action="pause-minus" aria-label="Decrease pause">−</button>
               <span class="rlms-pause-value" id="minesweeper-pause-value">1.2 s</span>
               <button type="button" class="rlms-pause-btn" id="minesweeper-pause-plus" data-rlms-action="pause-plus" aria-label="Increase pause">+</button>
+              <button type="button" class="rlms-pause-btn rlms-instant-btn" id="minesweeper-instant-solve" data-rlms-action="instant-solve" aria-label="Instant autosolve (no step delay)" title="Instant autosolve (no delay between moves)">🐇</button>
             </div>
           </div>
           <div class="rlms-chart-wrap">
@@ -106,7 +107,7 @@ layout: null
     </div>
   </div>
 
-  <p class="rlms-back"><a href="{{ '/' | relative_url }}">Back to Computational Catharsis</a></p>
+  <p class="rlms-back"><a href="{{ '/projects/' | relative_url }}">Back to Computational Catharsis</a></p>
 
   <script src="{{ '/assets/js/minesweeper.js' | relative_url }}"></script>
 </body>
