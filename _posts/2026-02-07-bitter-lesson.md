@@ -1,7 +1,7 @@
 ---
 title: 'Rich Sutton Plays Minesweeper'
 date: 2026-02-07
-permalink: /posts/2026/02/vibe-coding/
+permalink: /posts/2026/02/bitter-lesson/
 tags:
   - vibe coding
   - reinforcement learning

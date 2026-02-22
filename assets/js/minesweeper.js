@@ -901,6 +901,11 @@
       return { toReveal: [], toFlag: [], guess: bestGuess, method: method };
     }
     if (bestGuess) return { toReveal: [], toFlag: [], guess: bestGuess, method: 'guessing' };
+    // Never get stuck: if we have frontier and guesses are allowed, pick a 50/50 or random cell
+    if (acceptGuesses && frontier.length > 0) {
+      var fallbackPick = frontier[(Math.random() * frontier.length) | 0];
+      return { toReveal: [], toFlag: [], guess: fallbackPick, method: '50/50-fallback' };
+    }
     return null;
   }
 
