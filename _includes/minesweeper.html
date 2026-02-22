@@ -34,6 +34,14 @@
           </div>
         </div>
 
+        <div>
+          <label for="minesweeper-solver">Solver</label>
+          <select id="minesweeper-solver" aria-label="Solver">
+            <option value="custom">Custom (David Hill)</option>
+            <option value="rl">RL agent</option>
+          </select>
+        </div>
+
         <div class="rlms-btns">
           <button type="button" class="rlms-btn rlms-btn--primary" id="minesweeper-new-game">New Game</button>
           <button type="button" class="rlms-btn" id="minesweeper-autosolve">Autosolve</button>
@@ -83,4 +91,7 @@
   </div>
 </div>
 
+<script>window.RLMS_ASSETS_BASE = "{{ base_path }}";</script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js" crossorigin></script>
+<script src="{{ base_path }}/assets/rl-minesweeper/inference.js"></script>
 <script src="{{ base_path }}/assets/js/minesweeper.js"></script>

@@ -16,6 +16,7 @@
   var metaSizeEl = document.getElementById('minesweeper-meta-size');
   var metaMinesEl = document.getElementById('minesweeper-meta-mines');
   var presetEl = document.getElementById('minesweeper-preset');
+  var solverEl = document.getElementById('minesweeper-solver');
   var wEl = document.getElementById('minesweeper-w');
   var hEl = document.getElementById('minesweeper-h');
   var mEl = document.getElementById('minesweeper-m');
@@ -23,6 +24,8 @@
   var autosolveBtn = document.getElementById('minesweeper-autosolve');
   var autoplayBtn = document.getElementById('minesweeper-autoplay');
   var resetBtn = document.getElementById('minesweeper-reset');
+
+  var solverMode = 'custom';
 
   var autoplayActive = false;
   var autoplayPauseMs = 1200;
@@ -936,6 +939,12 @@
 
   function runAutosolve() {
     if (gameOver) return;
+
+    if (solverMode === 'rl') {
+      runAutosolveRL();
+      return;
+    }
+
     if (!grid.length || firstClick) {
       setStatus('<b>Status:</b> Make at least one click to start the board, then run Autosolve.', '');
       return;
@@ -1028,6 +1037,109 @@
     }
 
     setTimeout(doStep, 0);
+  }
+
+  function runAutosolveRL() {
+    var total = W * H - MINES;
+    var maxSteps = 500;
+    var steps = 0;
+    var delayMs = instantAutosolve ? 0 : SOLVER_ANIMATION_DELAY_MS;
+    var base = (typeof window !== 'undefined' && window.RLMS_ASSETS_BASE != null) ? window.RLMS_ASSETS_BASE : '';
+    var policyUrl = base + '/assets/rl-minesweeper/policy.onnx';
+
+    if (W !== 9 || H !== 9) {
+      setStatus('<b>Status:</b> RL agent only supports 9×9 (Beginner). Switch to Beginner or use Custom solver.', '');
+      return;
+    }
+
+    function finish() {
+      isAutosolving = false;
+      if (!gameOver && revealedCount < total) {
+        setStatus('<b>Status:</b> RL solver stuck or no move.', '');
+      }
+      if (autoplayActive) {
+        var won = (revealedCount >= total);
+        autoplayGames++;
+        if (won) autoplayWins++;
+        autoplayResults.push(won);
+        var capEl = document.getElementById('minesweeper-chart-caption');
+        if (capEl) capEl.textContent = 'Games: ' + autoplayGames + ' — Win ratio: ' + ((autoplayWins / autoplayGames) * 100).toFixed(1) + '%';
+        drawWinRatioChart();
+        setTimeout(function () {
+          if (!autoplayActive) return;
+          newGame();
+          setTimeout(autoplayRound, AUTOPLAY_START_DELAY_MS);
+        }, autoplayPauseMs);
+      }
+    }
+
+    function buildState() {
+      var g = [];
+      for (var i = 0; i < grid.length; i++) {
+        g.push({ revealed: grid[i].revealed, flagged: grid[i].flagged, adj: grid[i].adj });
+      }
+      return { w: W, h: H, grid: g };
+    }
+
+    function doFirstClickThenLoop() {
+      var cx = Math.floor(W / 2);
+      var cy = Math.floor(H / 2);
+      reveal(cx, cy);
+      isAutosolving = true;
+      startTimer();
+      setTimeout(doRLLoop, 0);
+    }
+
+    function doRLLoop() {
+      if (gameOver || revealedCount >= total || steps >= maxSteps) {
+        finish();
+        return;
+      }
+      var rl = typeof window !== 'undefined' && window.RLMinesweeper;
+      if (!rl) {
+        setStatus('<b>Status:</b> RL module not loaded.', '');
+        finish();
+        return;
+      }
+      var loadPromise = rl.isRLReady(W, H)
+        ? Promise.resolve()
+        : rl.loadRLModel(policyUrl).catch(function (err) {
+            setStatus('<b>Status:</b> Failed to load RL model. Run export_onnx.py and ensure policy.onnx exists.', '');
+            return Promise.reject(err);
+          });
+      loadPromise.then(function () {
+        return rl.getRLAction(buildState());
+      }).then(function (action) {
+        if (gameOver) { finish(); return; }
+        if (!action) {
+          finish();
+          return;
+        }
+        if (action.type === 'reveal' && !grid[idxOf(action.x, action.y)].revealed && !grid[idxOf(action.x, action.y)].flagged) {
+          reveal(action.x, action.y);
+          steps++;
+        }
+        if (gameOver || revealedCount >= total) {
+          finish();
+          return;
+        }
+        if (delayMs <= 0) {
+          setTimeout(doRLLoop, 0);
+        } else {
+          setTimeout(doRLLoop, delayMs);
+        }
+      }).catch(function () {
+        finish();
+      });
+    }
+
+    if (!grid.length || firstClick) {
+      doFirstClickThenLoop();
+      return;
+    }
+    isAutosolving = true;
+    startTimer();
+    doRLLoop();
   }
 
   function autoplayRound() {
@@ -1296,6 +1408,12 @@
       newGame();
     }
   });
+  if (solverEl) {
+    solverMode = solverEl.value || 'custom';
+    solverEl.addEventListener('change', function () {
+      solverMode = solverEl.value || 'custom';
+    });
+  }
 
   [wEl, hEl, mEl].forEach(function (el) {
     if (el) el.addEventListener('input', function () { if (presetEl) presetEl.value = 'custom'; });
