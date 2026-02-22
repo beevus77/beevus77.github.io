@@ -539,6 +539,8 @@
     return { solutions: totalSolutions, mineCounts: mineCounts, timedOut: abort ? abort.timedOut : false };
   }
 
+  // Enumerates valid mine layouts on the frontier to get P(mine) per cell; used to find
+  // safe cells (prob 0) or definite mines (prob 1). Can be slow when frontier is large.
   function probabilityEngine(frontier, constraints, remainingMines, otherHiddenCount) {
     var F = frontier.length;
     var O = otherHiddenCount;
@@ -857,6 +859,16 @@
       var guessCell = frontier[(Math.random() * frontier.length) | 0];
       if (acceptGuesses) return { toReveal: [], toFlag: [], guess: guessCell, method: 'random' };
       return { toReveal: [], toFlag: [], guess: null, method: 'stuck' };
+    }
+
+    // 50/50s need no probability: just guess and continue. Check before the heavy engine.
+    var fifty50Early = find5050(frontier, constraints, frontierSet);
+    if (acceptGuesses && (fifty50Early.quads.length > 0 || fifty50Early.pairs.length > 0)) {
+      var pickEarly = fifty50Early.quads.length > 0
+        ? fifty50Early.quads[0][0]
+        : fifty50Early.pairs[0][0];
+      var methodEarly = fifty50Early.quads.length > 0 ? '2x2' : '50/50';
+      return { toReveal: [], toFlag: [], guess: pickEarly, method: methodEarly };
     }
 
     var result = probabilityEngine(frontier, constraints, remainingMines, otherHiddenCount);
