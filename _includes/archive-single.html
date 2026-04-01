@@ -12,8 +12,17 @@
   {% assign title = post.title %}
 {% endif %}
 
+{% assign pub_teaser = false %}
+{% if post.collection == 'publications' %}
+  {% if post.header.teaser %}
+    {% capture pub_teaser %}{{ post.header.teaser }}{% endcapture %}
+  {% elsif post.teaser %}
+    {% capture pub_teaser %}{{ post.teaser }}{% endcapture %}
+  {% endif %}
+{% endif %}
+
 <div class="{{ include.type | default: "list" }}__item">
-  <article class="archive__item" itemscope itemtype="http://schema.org/CreativeWork">
+  <article class="archive__item{% if pub_teaser %} archive__item--publication{% endif %}" itemscope itemtype="http://schema.org/CreativeWork">
     {% if include.type == "grid" and teaser %}
       <div class="archive__item-teaser">
         <img src=
@@ -24,6 +33,22 @@
           {% endif %}
           alt="">
       </div>
+    {% endif %}
+
+    {% if pub_teaser %}
+    <div class="archive__item-publication">
+      <div class="archive__item-teaser archive__item-teaser--publication">
+        <a href="{{ base_path }}{{ post.url }}" rel="permalink">
+          <img src=
+            {% if pub_teaser contains "://" %}
+              "{{ pub_teaser }}"
+            {% else %}
+              "{{ pub_teaser | prepend: "/images/" | prepend: base_path }}"
+            {% endif %}
+            alt="{{ title | xml_escape }}" loading="lazy">
+        </a>
+      </div>
+      <div class="archive__item-body">
     {% endif %}
 
     <h2 class="archive__item-title" itemprop="headline">
@@ -58,6 +83,11 @@
       <p>Recommended citation: {{ post.citation }} </p>
     {% elsif post.paperurl %}
       <p>Download <a href=" {{ post.paperurl }} "><u>here</u></a></p>
+    {% endif %}
+
+    {% if pub_teaser %}
+      </div>
+    </div>
     {% endif %}
 
   </article>
